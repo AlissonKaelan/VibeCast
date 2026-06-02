@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # API Principal - Laravel
+  app:
+    build:
+      context: ./backend-laravel
+      dockerfile: Dockerfile
+    image: spotube-laravel-app
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend-laravel:/var/www
+    depends_on:
+      - db
+    networks:
+      - spotube-net
+
+  # Microsserviço de Extração - Python
+  python-extractor:
+    build:
+      context: ./extractor-python
+      dockerfile: Dockerfile
+    image: spotube-python-extractor
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./extractor-python:/app
+    networks:
+      - spotube-net
+
+  # Banco de Dados - MySQL (Porta 3308)
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3308:3306"  # <--- Mapeia a porta 3308 do Windows para a 3306 do Container
+    environment:
+      MYSQL_DATABASE: VibeCast
+      MYSQL_ROOT_PASSWORD: root_password_local
+    volumes:
+      - spotube-db-data:/var/lib/mysql
+    networks:
+      - spotube-net
+
+networks:
+  spotube-net:
+    driver: bridge
+
+volumes:
+  spotube-db-data:
+    driver: local
