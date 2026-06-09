@@ -12,4 +12,5 @@ Route::get('/user', function (Request $request) {
 // Rota da nossa API VibeCast (sem bloqueios do web)
 Route::post('/track/stream', [AudioController::class, 'getStreamUrl']);
 
+// O motor real está de volta!
 Route::post('/playlist/import', [PlaylistController::class, 'import']);
