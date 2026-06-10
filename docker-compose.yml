@@ -27,6 +27,8 @@ services:
       - "5000:5000"
     volumes:
       - ./extractor-python:/app
+      # Compartilhando a pasta de músicas do Laravel com o Python!
+      - ./backend-laravel/storage/app/public/musicas:/app/musicas
     networks:
       - spotube-net
 

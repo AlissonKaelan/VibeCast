@@ -49,12 +49,14 @@ class PlaylistController extends Controller
                 foreach ($data['tracks_urls'] as $trackData) {
                     // O método firstOrCreate evita duplicar a mesma música no banco
                     $track = Track::firstOrCreate(
-                        ['youtube_id' => $trackData['youtube_id'] ?? null],
                         [
                             'title' => $trackData['title'] ?? 'Música sem título',
                             'artist' => $trackData['artist'] ?? 'Artista desconhecido',
+                        ],
+                        [
+                            'youtube_id' => null,
                             'cover_url' => $trackData['cover_url'] ?? null,
-                            'duration_seconds' => $trackData['duration_seconds'] ?? null,
+                            'duration_seconds' => $trackData['duration_seconds'] ?? 0,
                         ]
                     );
                     $trackIds[] = $track->id;
@@ -74,7 +76,9 @@ class PlaylistController extends Controller
                     'description' => $playlist->description,
                     'total_tracks_imported' => count($trackIds),
                     'created_at' => $playlist->created_at
-                ]
+                ],
+                'tracks' => $playlist->tracks,
+                'raw_python_data' => $data
             ], 201);
 
         } catch (\Exception $e) {

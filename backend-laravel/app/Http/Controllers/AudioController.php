@@ -46,4 +46,40 @@ class AudioController extends Controller
             ], 500);
         }
     }
+
+    public function downloadTrack($id)
+    {
+        // 1. Busca a música no banco de dados
+        $track = \App\Models\Track::findOrFail($id);
+
+        // 2. Se já tiver o arquivo, não baixa de novo!
+        if ($track->file_path) {
+            return response()->json([
+                'message' => 'A música já está salva no seu PC!',
+                'file_path' => asset('storage/' . $track->file_path)
+            ]);
+        }
+
+        // 3. Pede para o Python fazer o trabalho pesado
+        $response = \Illuminate\Support\Facades\Http::post('http://python-extractor:5000/download-track', [
+            'title' => $track->title,
+            'artist' => $track->artist
+        ]);
+
+        if ($response->failed()) {
+            return response()->json(['error' => 'Falha ao comunicar com o extrator Python'], 500);
+        }
+
+        $data = $response->json();
+
+        // 4. Salva o caminho do arquivo físico no Banco de Dados
+        $track->file_path = $data['file_path'];
+        $track->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Download concluído e salvo no banco!',
+            'file_path' => asset('storage/' . $track->file_path)
+        ]);
+    }
 }

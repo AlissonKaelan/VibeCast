@@ -14,3 +14,6 @@ Route::post('/track/stream', [AudioController::class, 'getStreamUrl']);
 
 // O motor real está de volta!
 Route::post('/playlist/import', [PlaylistController::class, 'import']);
+
+// Rota para baixar a música fisicamente para o PC
+Route::post('/tracks/{id}/download', [AudioController::class, 'downloadTrack']);
