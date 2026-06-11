@@ -89,4 +89,15 @@ class PlaylistController extends Controller
             ], 500);
         }
     }
+
+    public function show($id)
+    {
+        // Busca a playlist e as músicas para vermos quais já têm o 'file_path' preenchido
+        $playlist = Playlist::with('tracks')->findOrFail($id);
+        
+        return response()->json([
+            'playlist' => $playlist,
+            'tracks' => $playlist->tracks
+        ]);
+    }
 }

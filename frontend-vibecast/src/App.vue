@@ -11,6 +11,9 @@ const downloadingTracks = ref({})
 const currentTrack = ref(null)
 const isPlaying = ref(false)
 let audioPlayer = null // Objeto de áudio nativo
+const currentPlaylistId = ref(null) // Para sabermos qual playlist atualizar
+const isDownloadingAll = ref(false)
+let pollingInterval = null
 
 // Função que dispara a comunicação com o Laravel
 const importPlaylist = async () => {
@@ -45,7 +48,7 @@ const importPlaylist = async () => {
     spotifyUrl.value = ''
 
     tracks.value = data.tracks || [];
-
+    currentPlaylistId.value = data.playlist.id;
   } catch (error) {
     message.value = error.message
     isError.value = true
@@ -115,6 +118,51 @@ const playTrack = (track) => {
   }
 }
 
+const downloadAll = async () => {
+  if (!currentPlaylistId.value) return;
+  
+  isDownloadingAll.value = true;
+  
+  try {
+    // Avisa o Laravel para enfileirar tudo
+    await fetch(`http://localhost:8000/api/playlists/${currentPlaylistId.value}/download-all`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' }
+    });
+    
+    // Inicia o "espião" para atualizar a tela sozinho
+    startPolling();
+  } catch (error) {
+    alert("Erro ao iniciar download em lote: " + error.message);
+    isDownloadingAll.value = false;
+  }
+}
+
+// NOVA FUNÇÃO: O "Espião" (Polling)
+const startPolling = () => {
+  if (pollingInterval) clearInterval(pollingInterval);
+  
+  // A cada 3 segundos, ele atualiza a lista de músicas escondido do usuário
+  pollingInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/playlists/${currentPlaylistId.value}`);
+      const data = await response.json();
+      
+      tracks.value = data.tracks; // A mágica visual acontece aqui!
+      
+      // Verifica se todas as músicas já têm o arquivo (file_path)
+      const allDownloaded = data.tracks.every(t => t.file_path);
+      
+      if (allDownloaded) {
+        clearInterval(pollingInterval); // Para de perguntar
+        isDownloadingAll.value = false; // Desliga o modo de carregamento
+      }
+    } catch (error) {
+      console.error("Erro ao verificar status:", error);
+    }
+  }, 3000); // 3000 ms = 3 segundos
+}
+
 </script>
 
 <template>
@@ -147,7 +195,31 @@ const playTrack = (track) => {
     </div>
 
     <div v-if="tracks.length > 0" class="w-full max-w-4xl mt-12 mb-32 pb-8">
-      <h3 class="text-2xl font-bold mb-6 border-b border-neutral-700 pb-2">Músicas da Playlist</h3>
+      <div class="mb-6 border-b border-neutral-700 pb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <h3 class="text-2xl font-bold">Músicas da Playlist</h3>
+          
+          <button 
+            @click="downloadAll"
+            :disabled="isDownloadingAll"
+            class="bg-white text-black font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+          >
+            <span v-if="isDownloadingAll" class="animate-spin">⏳</span>
+            <span v-else>⬇️</span>
+            {{ isDownloadingAll ? 'Baixando em Segundo Plano...' : 'Baixar Todas' }}
+          </button>
+        </div>
+
+        <div v-if="isDownloadingAll" class="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden border border-neutral-700">
+          <div 
+            class="bg-green-500 h-2.5 rounded-full transition-all duration-500 ease-out" 
+            :style="{ width: `${(tracks.filter(t => t.file_path).length / tracks.length) * 100}%` }"
+          ></div>
+        </div>
+        <p v-if="isDownloadingAll" class="text-xs text-neutral-400 mt-2 text-right">
+          {{ tracks.filter(t => t.file_path).length }} de {{ tracks.length }} baixadas
+        </p>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 

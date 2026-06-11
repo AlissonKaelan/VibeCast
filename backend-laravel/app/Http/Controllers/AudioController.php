@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Jobs\DownloadTrackJob;
+use App\Models\Playlist;
 
 class AudioController extends Controller
 {
@@ -81,5 +83,27 @@ class AudioController extends Controller
             'message' => 'Download concluído e salvo no banco!',
             'file_path' => asset('storage/' . $track->file_path)
         ]);
+    }
+
+    public function downloadPlaylistTracks($playlistId)
+    {
+        // 1. Pega a playlist e todas as músicas dela
+        $playlist = \App\Models\Playlist::with('tracks')->findOrFail($playlistId);
+        $dispatchedCount = 0;
+
+        // 2. Passa por cada música
+        foreach ($playlist->tracks as $track) {
+            // Se a música ainda não foi baixada, manda para a Fila (Background)
+            if (!$track->file_path) {
+                \App\Jobs\DownloadTrackJob::dispatch($track);
+                $dispatchedCount++;
+            }
+        }
+
+        // 3. Responde IMEDIATAMENTE ao Vue.js (Código 202 Accepted = Processando em segundo plano)
+        return response()->json([
+            'success' => true,
+            'message' => "Processamento iniciado. $dispatchedCount músicas foram adicionadas à fila de download."
+        ], 202);
     }
 }

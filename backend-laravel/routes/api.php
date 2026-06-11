@@ -17,3 +17,9 @@ Route::post('/playlist/import', [PlaylistController::class, 'import']);
 
 // Rota para baixar a música fisicamente para o PC
 Route::post('/tracks/{id}/download', [AudioController::class, 'downloadTrack']);
+
+// Rota para disparar o download em lote (Fila)
+Route::post('/playlists/{id}/download-all', [AudioController::class, 'downloadPlaylistTracks']);
+
+// Rota para consultar o status atualizado da playlist (Polling)
+Route::get('/playlists/{id}', [PlaylistController::class, 'show']);
