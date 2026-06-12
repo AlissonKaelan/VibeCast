@@ -100,4 +100,14 @@ class PlaylistController extends Controller
             'tracks' => $playlist->tracks
         ]);
     }
+
+    public function index()
+    {
+        // Pega todas as playlists salvas no banco de dados
+        $playlists = Playlist::withCount('tracks')->get();
+
+        return response()->json([
+            'playlists' => $playlists
+        ]);
+    }
 }

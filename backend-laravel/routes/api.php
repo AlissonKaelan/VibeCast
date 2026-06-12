@@ -23,3 +23,6 @@ Route::post('/playlists/{id}/download-all', [AudioController::class, 'downloadPl
 
 // Rota para consultar o status atualizado da playlist (Polling)
 Route::get('/playlists/{id}', [PlaylistController::class, 'show']);
+
+// Rota para listar todas as playlists na Biblioteca
+Route::get('/playlists', [PlaylistController::class, 'index']);
