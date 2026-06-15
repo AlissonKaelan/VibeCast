@@ -184,7 +184,7 @@ const moveToPlaylist = async (playlistId) => {
 
           <button 
             v-if="track.file_path"
-            @click="playerStore.playTrack(track)"
+            @click="playerStore.playTrack(track, playerStore.tracks)"
             class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center transition-transform hover:scale-105 shadow-[0_0_10px_rgba(37,99,235,0.3)]"
           >
             <Pause v-if="playerStore.currentTrack?.id === track.id && playerStore.isPlaying" class="w-4 h-4 fill-white" />

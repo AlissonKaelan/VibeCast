@@ -8,11 +8,20 @@ export const usePlayerStore = defineStore('player', () => {
   const isPlaying = ref(false)
   const currentTime = ref(0)
   const duration = ref(0)
-  const volume = ref(1)
+  const volume = ref(0.5)
   const isSeeking = ref(false)
   let audioPlayer = null 
 
-  // 2. Variáveis da Biblioteca (Estas que estavam faltando!)
+  // ==========================================
+  // NOVIDADES: Estados da Fila e Modos de Play
+  // ==========================================
+  const queue = ref([])             // A fila real que vai tocar
+  const originalQueue = ref([])     // O backup da ordem original
+  const currentIndex = ref(-1)      // Posição atual na fila
+  const isShuffle = ref(false)      // Botão de Aleatório
+  const loopMode = ref(0)           // 0: Desativado, 1: Repetir Tudo, 2: Repetir Atual
+
+  // 2. Variáveis da Biblioteca
   const savedPlaylists = ref([])
   const currentPlaylistId = ref(null)
 
@@ -26,7 +35,7 @@ export const usePlayerStore = defineStore('player', () => {
     }, 4000)
   }
 
-  // 4. Função que busca as pastas no Laravel
+  // 4. Funções da API (Laravel)
   const loadLibrary = async () => {
     try {
       const response = await fetch('http://localhost:8000/api/playlists')
@@ -42,7 +51,7 @@ export const usePlayerStore = defineStore('player', () => {
       const response = await fetch('http://localhost:8000/api/tracks')
       const data = await response.json()
       tracks.value = data.tracks
-      currentPlaylistId.value = null // Desmarca a playlist no menu esquerdo
+      currentPlaylistId.value = null 
     } catch (error) {
       console.error("Erro ao carregar todas as músicas:", error)
     }
@@ -52,11 +61,22 @@ export const usePlayerStore = defineStore('player', () => {
   const getAudioUrl = (filePath) => {
     if (!filePath) return ''
     if (filePath.startsWith('http')) return filePath
-    return `http://localhost:8000/storage/${filePath}`
+    return `http://localhost:8000/api/stream?path=${filePath}`
   }
 
-  const playTrack = (track) => {
-    if (currentTrack.value && currentTrack.value.id === track.id) {
+  // Função utilitária para embaralhar array
+  const shuffleArray = (array) => {
+    const newArray = [...array]
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[newArray[i], newArray[j]] = [newArray[j], newArray[i]]
+    }
+    return newArray
+  }
+
+  const playTrack = (track, playlistTracks = [], forcePlay = false) => {
+    // Só pausa se NÃO for um comando forçado do sistema
+    if (currentTrack.value && currentTrack.value.id === track.id && !forcePlay) {
       if (isPlaying.value) {
         audioPlayer.pause()
         isPlaying.value = false
@@ -67,30 +87,42 @@ export const usePlayerStore = defineStore('player', () => {
       return
     }
 
+    if (playlistTracks.length > 0) {
+      const playableTracks = playlistTracks.filter(t => t.file_path)
+      originalQueue.value = [...playableTracks]
+      
+      if (isShuffle.value) {
+        const remaining = playableTracks.filter(t => t.id !== track.id)
+        queue.value = [track, ...shuffleArray(remaining)]
+      } else {
+        queue.value = [...playableTracks]
+      }
+    } else if (queue.value.length === 0) {
+      queue.value = [track]
+      originalQueue.value = [track]
+    }
+
+    currentIndex.value = queue.value.findIndex(t => t.id === track.id)
+
     if (audioPlayer) audioPlayer.pause()
 
     currentTrack.value = track
     audioPlayer = new Audio(getAudioUrl(track.file_path))
     audioPlayer.volume = volume.value
 
+
     audioPlayer.addEventListener('error', async () => {
       notify('Arquivo não encontrado no PC. Sincronizando...', 'error')
       isPlaying.value = false
-      
-      // Tira o caminho do arquivo visualmente na hora para o botão de download voltar
       const trackInList = tracks.value.find(t => t.id === track.id)
       if (trackInList) trackInList.file_path = null
-      
-      // Avisa o Laravel para corrigir no banco de dados
       try {
         await fetch(`http://localhost:8000/api/tracks/${track.id}/reset-file`, { method: 'POST' })
       } catch (e) {}
     })
     
     audioPlayer.addEventListener('timeupdate', () => {
-      if (!isSeeking.value) {
-        currentTime.value = audioPlayer.currentTime
-      }
+      if (!isSeeking.value) currentTime.value = audioPlayer.currentTime
     })
 
     audioPlayer.addEventListener('loadedmetadata', () => {
@@ -100,28 +132,78 @@ export const usePlayerStore = defineStore('player', () => {
     audioPlayer.play()
     isPlaying.value = true
 
-    audioPlayer.onended = () => nextTrack()
-  }
-
-  const nextTrack = () => {
-    if (!currentTrack.value || tracks.value.length === 0) return
-    const currentIndex = tracks.value.findIndex(t => t.id === currentTrack.value.id)
-    for (let i = currentIndex + 1; i < tracks.value.length; i++) {
-      if (tracks.value[i].file_path) {
-        playTrack(tracks.value[i])
-        return
+    // O SEGREDO: Controle manual do Loop ao terminar a música!
+    audioPlayer.onended = () => {
+      if (loopMode.value === 2) {
+        // Se for "Repetir Música Atual", voltamos o tempo para o zero e damos play!
+        audioPlayer.currentTime = 0
+        audioPlayer.play()
+      } else {
+        // Caso contrário, tenta ir para a próxima (que pode ter o Loop da Fila)
+        nextTrack()
       }
     }
   }
 
-  const prevTrack = () => {
-    if (!currentTrack.value || tracks.value.length === 0) return
-    const currentIndex = tracks.value.findIndex(t => t.id === currentTrack.value.id)
-    for (let i = currentIndex - 1; i >= 0; i--) {
-      if (tracks.value[i].file_path) {
-        playTrack(tracks.value[i])
+  // 2. nextTrack e prevTrack agora avisam que é "forcePlay = true"
+  const nextTrack = () => {
+    if (queue.value.length === 0) return
+
+    let nextIndex = currentIndex.value + 1
+
+    if (nextIndex >= queue.value.length) {
+      if (loopMode.value === 1) { // 1 = Repetir Fila (Playlist)
+        nextIndex = 0 // Volta para a primeira música da fila!
+      } else {
+        isPlaying.value = false // Sem repetição, apenas para de tocar.
         return
       }
+    }
+
+    playTrack(queue.value[nextIndex], [], true)
+  }
+
+  const prevTrack = () => {
+    if (queue.value.length === 0) return
+
+    if (audioPlayer && audioPlayer.currentTime > 3) {
+      audioPlayer.currentTime = 0
+      return
+    }
+
+    let prevIdx = currentIndex.value - 1
+    
+    if (prevIdx < 0) {
+      if (loopMode.value === 1) {
+        prevIdx = queue.value.length - 1 
+      } else {
+        prevIdx = 0
+      }
+    }
+    // Passamos `true` no terceiro parâmetro!
+    playTrack(queue.value[prevIdx], [], true)
+  }
+
+  // 3. Atualizando o Toggle Loop para refletir no áudio na mesma hora
+  const toggleLoop = () => {
+    // Alterna os Modos: 0 (Desligado) -> 1 (Playlist) -> 2 (Atual) -> 0...
+    loopMode.value = (loopMode.value + 1) % 3
+  }
+
+  // ===============================
+  // NOVOS CONTROLES DE REPRODUÇÃO
+  // ===============================
+  const toggleShuffle = () => {
+    isShuffle.value = !isShuffle.value
+    
+    if (isShuffle.value) {
+      const current = queue.value[currentIndex.value]
+      let remaining = queue.value.filter(t => t.id !== current?.id)
+      queue.value = [current, ...shuffleArray(remaining)]
+      currentIndex.value = 0
+    } else {
+      queue.value = [...originalQueue.value]
+      currentIndex.value = queue.value.findIndex(t => t.id === currentTrack.value?.id)
     }
   }
 
@@ -136,15 +218,17 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const setSeek = (newTime) => {
-    currentTime.value = newTime
-    if (audioPlayer) audioPlayer.currentTime = newTime
+    const timeAsNumber = Number(newTime)
+    currentTime.value = timeAsNumber
+    if (audioPlayer) {
+      audioPlayer.currentTime = timeAsNumber
+    }
   }
-
-  // EXPORTANDO TUDO
   return {
     tracks, currentTrack, isPlaying, currentTime, duration, volume, isSeeking,
+    queue, originalQueue, currentIndex, isShuffle, loopMode, // Exportamos as novas variáveis
     savedPlaylists, currentPlaylistId, loadLibrary, loadAllTracks,
     notification, notify,
-    playTrack, nextTrack, prevTrack, setVolume, toggleMute, setSeek
+    playTrack, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek // Exportamos os novos métodos
   }
 })

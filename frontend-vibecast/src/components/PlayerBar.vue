@@ -1,6 +1,7 @@
 <script setup>
 import { usePlayerStore } from '../stores/playerStore'
-import { Play, Pause, Volume2, VolumeX, SkipBack, SkipForward } from 'lucide-vue-next'
+// Novos ícones importados: Shuffle, Repeat, Repeat1 (Para repetir a mesma música)
+import { Play, Pause, Volume2, VolumeX, SkipBack, SkipForward, Shuffle, Repeat, Repeat1 } from 'lucide-vue-next'
 
 const playerStore = usePlayerStore()
 
@@ -10,31 +11,7 @@ const formatTime = (time) => {
   const seconds = Math.floor(time % 60)
   return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
 }
-
-// 1. Trava a barra e desliga o "timeupdate" do áudio quando o usuário clica
-const handleSeekStart = () => { 
-  playerStore.isSeeking = true 
-}
-
-// 2. O usuário está arrastando o dedo/mouse: atualiza APENAS o visual
-const handleSeekDragging = (event) => { 
-  playerStore.currentTime = Number(event.target.value) 
-}
-
-// 3. O usuário soltou o clique: Avisa a música para pular
-const handleSeekEnd = (event) => { 
-  playerStore.setSeek(Number(event.target.value))
-  
-  // O SEGREDO MÁGICO: Um amortecedor de 100ms.
-  // Isso impede que o áudio antigo puxe a barra de volta antes do pulo acontecer.
-  setTimeout(() => {
-    playerStore.isSeeking = false
-  }, 100)
-}
-
-const updateVolume = (event) => { 
-  playerStore.setVolume(Number(event.target.value)) 
-}
+const updateVolume = (event) => { playerStore.setVolume(Number(event.target.value)) }
 </script>
 
 <template>
@@ -54,7 +31,17 @@ const updateVolume = (event) => {
     </div>
 
     <div class="flex flex-col items-center gap-2 flex-1 max-w-xl">
-      <div class="flex items-center gap-5">
+      <div class="flex items-center gap-6">
+        
+        <button 
+          @click="playerStore.toggleShuffle" 
+          :class="playerStore.isShuffle ? 'text-blue-500 hover:text-blue-400' : 'text-neutral-400 hover:text-white'" 
+          class="transition-colors"
+          title="Aleatório"
+        >
+          <Shuffle class="w-4 h-4" />
+        </button>
+
         <button @click="playerStore.prevTrack" class="text-neutral-400 hover:text-white transition-colors">
           <SkipBack class="w-5 h-5 fill-current" />
         </button>
@@ -70,25 +57,33 @@ const updateVolume = (event) => {
         <button @click="playerStore.nextTrack" class="text-neutral-400 hover:text-white transition-colors">
           <SkipForward class="w-5 h-5 fill-current" />
         </button>
+
+        <button 
+          @click="playerStore.toggleLoop" 
+          :class="playerStore.loopMode > 0 ? 'text-blue-500 hover:text-blue-400' : 'text-neutral-400 hover:text-white'" 
+          class="transition-colors"
+          title="Modo de Repetição"
+        >
+          <Repeat1 v-if="playerStore.loopMode === 2" class="w-4 h-4" />
+          <Repeat v-else class="w-4 h-4" />
+        </button>
+
       </div>
 
-      <div class="flex items-center gap-2 w-full">
+      <div class="flex items-center gap-2 w-full mt-1">
         <span class="text-[10px] text-neutral-400 font-mono w-8 text-right">{{ formatTime(playerStore.currentTime) }}</span>
-        
-        <!-- BARRA COM O NOVO STEP="0.1" E EVENTOS OTIMIZADOS -->
         <input 
           type="range" 
           min="0" 
-          :max="playerStore.duration || 0" 
-          step="0.1"
+          :max="playerStore.duration || 100" 
+          step="1"
           :value="playerStore.currentTime"
-          @mousedown="handleSeekStart" 
-          @touchstart="handleSeekStart" 
-          @input="handleSeekDragging" 
-          @change="handleSeekEnd" 
+          @mousedown="playerStore.isSeeking = true" 
+          @touchstart="playerStore.isSeeking = true" 
+          @input="playerStore.currentTime = Number($event.target.value)" 
+          @change="playerStore.setSeek($event.target.value); playerStore.isSeeking = false" 
           class="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer hover:h-1.5 transition-all accent-blue-500"
         />
-        
         <span class="text-[10px] text-neutral-400 font-mono w-8">{{ formatTime(playerStore.duration) }}</span>
       </div>
     </div>
