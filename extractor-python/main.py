@@ -32,7 +32,7 @@ def extract_audio(query: TrackQuery):
         raise HTTPException(status_code=404, detail="Música não encontrada no YouTube Music")
     video_id = search_results[0]['videoId']
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-    ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'no_warnings': True, 'simulate': True}
+    ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'no_warnings': True, 'simulate': True, 'cookiefile': '/app/cookies.txt'}
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
@@ -153,49 +153,42 @@ class DownloadQuery(BaseModel):
 @app.post("/download-track")
 def download_track(query: DownloadQuery):
     try:
-        # 1. Pesquisa a música no YouTube Music
         search_query = f"{query.title} {query.artist}"
         search_results = ytmusic.search(query=search_query, filter="songs", limit=1)
         
         if not search_results:
-            raise HTTPException(status_code=404, detail="Música não encontrada no YouTube Music.")
+            raise HTTPException(status_code=404, detail="Música não encontrada.")
             
         video_id = search_results[0]['videoId']
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         
-        # 2. Cria um nome de ficheiro seguro (sem caracteres especiais que quebram URLs)
         safe_title = re.sub(r'[^a-zA-Z0-9]', '_', query.title)
         safe_artist = re.sub(r'[^a-zA-Z0-9]', '_', query.artist)
         file_name = f"{safe_artist}_{safe_title}_{video_id}".lower()
-        
-        # Caminho absoluto dentro do contêiner Python (que reflete no Laravel)
         output_template = f"/app/musicas/{file_name}.%(ext)s"
         
-        # 3. Configurações do yt-dlp (Baixar melhor áudio no formato m4a nativo para web)
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
-            'quiet': True,
+            'quiet': False,
             'no_warnings': True,
+            'cookiefile': '/app/cookies.txt', 
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            'sleep_interval': 5,        
+            'max_sleep_interval': 15,
         }
         
-        # 4. Executa o Download Físico!
+        # Bloco de execução único e limpo
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=True)
-            # Descobre qual foi a extensão real que ele baixou (m4a, webm, etc)
             ext = info.get('ext', 'm4a')
-            final_filename = f"{file_name}.{ext}"
-            
-            # O caminho relativo que o Laravel vai guardar na base de dados
-            db_file_path = f"musicas/{final_filename}"
+            db_file_path = f"musicas/{file_name}.{ext}"
             
             return {
                 "success": True,
-                "title": query.title,
-                "artist": query.artist,
-                "file_path": db_file_path,
-                "message": "Download concluído com sucesso!"
+                "file_path": db_file_path
             }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro no download: {str(e)}")
+        # Aqui o erro é enviado para o Laravel com o detalhe do yt-dlp
+        raise HTTPException(status_code=500, detail=str(e))
