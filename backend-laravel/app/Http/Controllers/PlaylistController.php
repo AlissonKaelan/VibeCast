@@ -15,13 +15,11 @@ class PlaylistController extends Controller
      */
     public function import(Request $request)
     {
-        // 1. Valida se a URL foi enviada corretamente
         $request->validate([
             'url' => 'required|url'
         ]);
 
         try {
-            // 2. Envia a URL para o microsserviço Python fazer a raspagem do título
             $response = Http::post('http://python-extractor:5000/import-playlist', [
                 'url' => $request->url
             ]);
@@ -34,20 +32,15 @@ class PlaylistController extends Controller
 
             $data = $response->json();
 
-            // 3. Cria o registro da Playlist no MySQL usando o Model
             $playlist = Playlist::create([
                 'name' => $data['playlist_name'],
                 'description' => 'Importada via link público do Spotify.'
             ]);
 
-            // 4. Preparação para o vínculo de músicas
-            // Como o raspador HTML puro trouxe 0 músicas por conta do JavaScript do Spotify,
-            // o array estará vazio por enquanto, mas a lógica relacional já fica pronta:
             $trackIds = [];
             
             if (!empty($data['tracks_urls'])) {
                 foreach ($data['tracks_urls'] as $trackData) {
-                    // O método firstOrCreate evita duplicar a mesma música no banco
                     $track = Track::firstOrCreate(
                         [
                             'title' => $trackData['title'] ?? 'Música sem título',
@@ -62,11 +55,11 @@ class PlaylistController extends Controller
                     $trackIds[] = $track->id;
                 }
 
-                // O método attach() insere automaticamente as linhas na tabela pivô (playlist_track)
-                $playlist->tracks()->attach($trackIds);
+                // A MÁGICA AQUI: Usamos syncWithoutDetaching em vez de attach. 
+                // Isso impede que a música seja duplicada na tabela pivô se houver um re-import!
+                $playlist->tracks()->syncWithoutDetaching($trackIds);
             }
 
-            // 5. Retorna a resposta de sucesso com os dados do banco
             return response()->json([
                 'success' => true,
                 'message' => 'Playlist criada com sucesso no ecossistema VibeCast!',
@@ -90,14 +83,15 @@ class PlaylistController extends Controller
         }
     }
 
+    // Mostrar uma playlist e as suas músicas
     public function show($id)
     {
-        // Busca a playlist e as músicas para vermos quais já têm o 'file_path' preenchido
+        // O "with('tracks')" diz ao Laravel para usar a tabela pivô e buscar as músicas!
         $playlist = Playlist::with('tracks')->findOrFail($id);
-        
+
         return response()->json([
             'playlist' => $playlist,
-            'tracks' => $playlist->tracks
+            'tracks' => $playlist->tracks // Devolve as músicas corretamente
         ]);
     }
 
@@ -108,6 +102,63 @@ class PlaylistController extends Controller
 
         return response()->json([
             'playlists' => $playlists
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        // 1. Validamos o nome como obrigatório e a descrição como opcional (nullable)
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000', // Adicionado
+        ]);
+
+        // 2. Gravamos no banco de dados incluindo a descrição
+        $playlist = Playlist::create([
+            'name' => $request->name,
+            'description' => $request->description, // Adicionado
+            'spotify_id' => uniqid('local_'), 
+            'cover_url' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Playlist criada com sucesso!',
+            'playlist' => $playlist
+        ], 201);
+    }
+
+    // Atualizar nome e descrição da playlist
+    public function update(Request $request, $id)
+    {
+        $playlist = Playlist::findOrFail($id);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000',
+        ]);
+
+        $playlist->update([
+            'name' => $request->name,
+            'description' => $request->description,
+        ]);
+
+        return response()->json([
+            'message' => 'Playlist atualizada com sucesso!',
+            'playlist' => $playlist
+        ]);
+    }
+
+    // Excluir uma playlist
+    public function destroy($id)
+    {
+        $playlist = Playlist::findOrFail($id);
+        
+        // Opcional: Se quiser deletar o vínculo com as músicas no banco, 
+        // o Laravel fará automaticamente se houver cascade na migration.
+        $playlist->delete();
+
+        return response()->json([
+            'message' => 'Playlist excluída com sucesso!'
         ]);
     }
 }
