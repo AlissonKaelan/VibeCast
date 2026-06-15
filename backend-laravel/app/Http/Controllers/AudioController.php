@@ -109,4 +109,24 @@ class AudioController extends Controller
             'message' => "Processamento iniciado. $dispatchedCount músicas foram adicionadas à fila de download."
         ], 202);
     }
+
+    public function streamTrack(Request $request)
+    {
+        // Verifica se o caminho foi enviado
+        $path = $request->query('path');
+        if (!$path) {
+            return response()->json(['error' => 'Caminho não fornecido'], 400);
+        }
+
+        // Caminho absoluto do ficheiro no disco do Docker
+        $fullPath = storage_path('app/public/' . $path);
+
+        if (!file_exists($fullPath)) {
+            abort(404, 'Ficheiro de áudio não encontrado.');
+        }
+
+        // O response()->file() do Laravel suporta nativamente HTTP 206 (Byte-Range)
+        // É isto que permite à barra de progresso saltar para qualquer parte da música!
+        return response()->file($fullPath);
+    }
 }
