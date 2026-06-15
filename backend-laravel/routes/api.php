@@ -4,10 +4,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AudioController;
 use App\Http\Controllers\PlaylistController;
+use App\Http\Controllers\TrackController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
+// Listar todas as músicas (Aba Início)
+Route::get('/tracks', [\App\Http\Controllers\TrackController::class, 'index']);
 
 // Rota da nossa API VibeCast (sem bloqueios do web)
 Route::post('/track/stream', [AudioController::class, 'getStreamUrl']);
@@ -26,3 +30,21 @@ Route::get('/playlists/{id}', [PlaylistController::class, 'show']);
 
 // Rota para listar todas as playlists na Biblioteca
 Route::get('/playlists', [PlaylistController::class, 'index']);
+
+// Rota para listar todas as playlists na Biblioteca
+Route::get('/playlists', [PlaylistController::class, 'index']);
+
+// NOVA ROTA: Criar playlist manual
+Route::post('/playlists', [PlaylistController::class, 'store']);
+
+// Rotas de gerenciamento de Playlists
+Route::get('/playlists', [PlaylistController::class, 'index']);
+Route::post('/playlists', [PlaylistController::class, 'store']);
+Route::put('/playlists/{id}', [PlaylistController::class, 'update']);
+Route::delete('/playlists/{id}', [PlaylistController::class, 'destroy']);
+
+// Mover música para outra playlist
+Route::put('/tracks/{id}/move', [TrackController::class, 'move']);
+
+// Rota para resetar o status de uma música deletada fisicamente
+Route::post('/tracks/{id}/reset-file', [\App\Http\Controllers\TrackController::class, 'resetFile']);

@@ -63,13 +63,16 @@ class AudioController extends Controller
         }
 
         // 3. Pede para o Python fazer o trabalho pesado
-        $response = \Illuminate\Support\Facades\Http::post('http://python-extractor:5000/download-track', [
-            'title' => $track->title,
-            'artist' => $track->artist
-        ]);
+        $response = \Illuminate\Support\Facades\Http::retry(3, 1000)
+            ->post('http://python-extractor:5000/download-track', [
+                'title' => $track->title,
+                'artist' => $track->artist
+            ]);
 
         if ($response->failed()) {
-            return response()->json(['error' => 'Falha ao comunicar com o extrator Python'], 500);
+            // Captura a mensagem de erro detalhada vinda do Python
+            $errorDetail = $response->json('detail') ?? 'Erro desconhecido no Python';
+            return response()->json(['error' => $errorDetail], 500);
         }
 
         $data = $response->json();
