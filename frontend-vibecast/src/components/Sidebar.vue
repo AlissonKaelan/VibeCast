@@ -173,7 +173,7 @@ onMounted(() => {
     <div class="h-px w-full bg-neutral-800/50 my-1"></div>
 
     <div class="flex-1 overflow-y-auto flex flex-col gap-2 invisible-scrollbar">
-      <div v-if="savedPlaylists.length === 0" class="text-neutral-500 text-xs px-2 py-4">
+      <div v-if="playerStore.savedPlaylists.length === 0" class="text-neutral-500 text-xs px-2 py-4">
         Nenhuma playlist salva.
       </div>
 
@@ -190,7 +190,7 @@ onMounted(() => {
           </div>
           
           <div class="flex-1 overflow-hidden">
-            <h4 class="font-bold text-xs truncate text-white" :class="currentPlaylistId === pl.id ? 'text-blue-500' : ''">
+            <h4 class="font-bold text-xs truncate text-white" :class="playerStore.currentPlaylistId === pl.id ? 'text-blue-500' : ''">
               {{ pl.name }}
             </h4>
             <p v-if="pl.description" class="text-[10px] text-neutral-500 truncate italic mt-0.5">

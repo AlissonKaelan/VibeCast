@@ -49,10 +49,10 @@ class AudioController extends Controller
         }
     }
 
-    public function downloadTrack(Request $request)
+    public function downloadTrack(Request $request, $id)
     {
-        // 1. Busca a música no banco
-        $track = \App\Models\Track::findOrFail($request->track_id);
+        // 1. Busca a música variável $id diretamente
+        $track = \App\Models\Track::findOrFail($id);
 
         // 2. A TRAVA DE SEGURANÇA: Se já tem arquivo, não faz nada!
         if ($track->file_path) {
@@ -78,14 +78,19 @@ class AudioController extends Controller
 
         $data = $response->json();
 
-        // 4. Salva o caminho do arquivo físico no Banco de Dados
-        $track->file_path = $data['file_path'];
+        // --- A MÁGICA ACONTECE AQUI ---
+        // Pega o caminho "/app/musicas/..." e remove o "/app/"
+        $caminhoSujo = $data['file_path'];
+        $caminhoLimpo = str_replace('/app/', '', $caminhoSujo);
+
+        // 4. Salva o caminho LIMPO ("musicas/...") no Banco de Dados
+        $track->file_path = $caminhoLimpo;
         $track->save();
 
         return response()->json([
             'success' => true,
             'message' => 'Download concluído e salvo no banco!',
-            'file_path' => asset('storage/' . $track->file_path)
+            'file_path' => $caminhoLimpo
         ]);
     }
 
@@ -191,5 +196,48 @@ class AudioController extends Controller
                 'error' => 'Erro interno do servidor: ' . $e->getMessage()
             ], 500);
         }
+    }
+    public function exportPlaylist($id)
+    {
+        // 1. Procura a playlist e as suas músicas
+        $playlist = \App\Models\Playlist::with('tracks')->findOrFail($id);
+        
+        // 2. Cria o ficheiro ZIP temporário
+        $zip = new \ZipArchive();
+        // Remove espaços e acentos do nome da playlist para não dar erro no Windows
+        $safePlaylistName = preg_replace('/[^A-Za-z0-9\-]/', '_', $playlist->name);
+        $zipFileName = 'VibeCast_' . $safePlaylistName . '.zip';
+        $zipPath = storage_path('app/public/' . $zipFileName);
+
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === TRUE) {
+            $hasFiles = false;
+
+            // 3. Adiciona as músicas baixadas ao ZIP
+            foreach ($playlist->tracks as $track) {
+                // Só adiciona se a música já tiver sido baixada (file_path preenchido e ficheiro real existir)
+                if ($track->file_path && \Storage::disk('public')->exists($track->file_path)) {
+                    $absolutePath = \Storage::disk('public')->path($track->file_path);
+                    
+                    // Formata o nome bonito para o pendrive: "Artista - Nome da Musica.m4a"
+                    $safeTitle = preg_replace('/[^A-Za-z0-9 \-\.]/', '', $track->title);
+                    $safeArtist = preg_replace('/[^A-Za-z0-9 \-\.]/', '', $track->artist);
+                    $fileName = $safeArtist . ' - ' . $safeTitle . '.m4a';
+                    
+                    $zip->addFile($absolutePath, $fileName);
+                    $hasFiles = true;
+                }
+            }
+            $zip->close();
+
+            // 4. Se não havia nenhuma música baixada na playlist, avisa o utilizador
+            if (!$hasFiles) {
+                return response()->json(['error' => 'Nenhuma música desta playlist foi descarregada ainda.'], 400);
+            }
+
+            // 5. Envia para o navegador e apaga o ZIP do servidor a seguir (para poupar espaço)
+            return response()->download($zipPath)->deleteFileAfterSend(true);
+        }
+
+        return response()->json(['error' => 'Erro ao criar o ficheiro ZIP.'], 500);
     }
 }

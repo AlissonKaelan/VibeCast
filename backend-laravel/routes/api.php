@@ -54,3 +54,5 @@ Route::get('/stream', [\App\Http\Controllers\AudioController::class, 'streamTrac
 
 // Rota da ponte de Importação do Spotify
 Route::post('/import-playlist', [\App\Http\Controllers\AudioController::class, 'importPlaylist']);
+// Rota para exportar a playlist inteira em .zip para o Pendrive
+Route::get('/playlists/{id}/export', [\App\Http\Controllers\AudioController::class, 'exportPlaylist']);

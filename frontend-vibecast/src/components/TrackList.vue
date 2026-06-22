@@ -1,10 +1,11 @@
 <script setup>
-import { ref } from 'vue'
-import { Download, Loader2, Music, Play, Pause, FolderPlus, X } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { Download, Loader2, Music, Play, Pause, FolderPlus, X, DownloadCloud } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
 
+// Assim que a tela carregar, ele vai buscar as músicas no banco!
 onMounted(() => {
   playerStore.loadAllTracks()
 })
@@ -21,10 +22,10 @@ const batchTotal = ref(0)
 const batchCompleted = ref(0)
 
 // ---------------------------------------------------------
-// FUNÇÕES DE DOWNLOAD (COM MOTOR DE FILA - WORKERS)
+// FUNÇÕES DE DOWNLOAD
 // ---------------------------------------------------------
 const downloadAudio = async (trackId, isBatch = false) => {
-  downloadingTracks.value[trackId] = true // Ícone girando
+  downloadingTracks.value[trackId] = true 
   try {
     const response = await fetch(`http://localhost:8000/api/tracks/${trackId}/download`, { 
       method: 'POST',
@@ -33,7 +34,6 @@ const downloadAudio = async (trackId, isBatch = false) => {
     
     if (!response.ok) throw new Error('Falha')
     
-    // Ao terminar, atualiza o caminho do arquivo na mesma hora na tela!
     const data = await response.json()
     const track = playerStore.tracks.find(t => t.id === trackId)
     if (track) track.file_path = data.file_path
@@ -42,7 +42,7 @@ const downloadAudio = async (trackId, isBatch = false) => {
   } catch (error) {
     if (!isBatch) playerStore.notify('Erro ao baixar música', 'error')
   } finally {
-    downloadingTracks.value[trackId] = false // Para de girar
+    downloadingTracks.value[trackId] = false 
   }
 }
 
@@ -58,8 +58,6 @@ const downloadAll = async () => {
   batchCompleted.value = 0
   isDownloadingAll.value = true
 
-  // MOTOR DE FILA (Evita travar o navegador)
-  // Ele vai baixar apenas 3 músicas simultaneamente
   const concurrency = 3; 
   let index = 0;
 
@@ -68,31 +66,24 @@ const downloadAll = async () => {
       const currentIndex = index++;
       const track = tracksToDownload[currentIndex];
       
-      // Espera a música baixar...
       await downloadAudio(track.id, true);
-      
-      // ...e só então avança a barra de progresso!
       batchCompleted.value++; 
     }
   }
 
-  // Cria os 3 "trabalhadores" invisíveis
   const workers = [];
   for (let i = 0; i < concurrency; i++) {
     workers.push(downloadWorker());
   }
 
-  // Espera todos os trabalhadores terminarem o serviço
   await Promise.all(workers);
 
-  // Finaliza
   isDownloadingAll.value = false;
   playerStore.notify(`Sucesso! ${batchTotal.value} músicas baixadas.`, 'success');
 }
 
-
 // ---------------------------------------------------------
-// FUNÇÕES DE MOVER PARA PLAYLIST
+// FUNÇÕES DE PLAYLIST E EXPORTAÇÃO
 // ---------------------------------------------------------
 const openMoveModal = async (track) => {
   trackToMove.value = track
@@ -115,20 +106,23 @@ const moveToPlaylist = async (playlistId) => {
     })
 
     const data = await response.json()
-
     if (!response.ok) throw new Error(data.error || 'Erro ao adicionar a música')
 
     await playerStore.loadLibrary()
     showMoveModal.value = false
-    
     playerStore.notify('Música adicionada à playlist!', 'success')
-
   } catch (error) {
     playerStore.notify(error.message, 'error')
   } finally {
     isMoving.value = false
     trackToMove.value = null
   }
+}
+
+const exportToPendrive = () => {
+  if (!playerStore.currentPlaylistId) return;
+  playerStore.notify('A compactar músicas. O download vai começar em breve!', 'success');
+  window.open(`http://localhost:8000/api/playlists/${playerStore.currentPlaylistId}/export`, '_blank');
 }
 </script>
 
@@ -137,15 +131,29 @@ const moveToPlaylist = async (playlistId) => {
     <div class="mb-6 border-b border-neutral-800 pb-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <h3 class="text-2xl font-bold">Faixas Musicais</h3>
-        <button 
-          @click="downloadAll"
-          :disabled="isDownloadingAll"
-          class="bg-blue-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2 text-sm shadow-lg shadow-blue-900/20"
-        >
-          <Loader2 v-if="isDownloadingAll" class="w-4 h-4 animate-spin" />
-          <Download v-else class="w-4 h-4" />
-          {{ isDownloadingAll ? 'A Transferir...' : 'Transferir Todas' }}
-        </button>
+        
+        <div class="flex gap-3">
+          
+          <button 
+            v-if="playerStore.currentPlaylistId"
+            @click="exportToPendrive"
+            class="bg-emerald-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform flex items-center gap-2 text-sm shadow-lg shadow-emerald-900/20"
+          >
+            <DownloadCloud class="w-4 h-4" />
+            Exportar (.zip)
+          </button>
+
+          <button 
+            @click="downloadAll"
+            :disabled="isDownloadingAll"
+            class="bg-blue-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2 text-sm shadow-lg shadow-blue-900/20"
+          >
+            <Loader2 v-if="isDownloadingAll" class="w-4 h-4 animate-spin" />
+            <Download v-else class="w-4 h-4" />
+            {{ isDownloadingAll ? 'A Transferir...' : 'Transferir Todas' }}
+          </button>
+          
+        </div>
       </div>
     </div>
 
@@ -154,7 +162,7 @@ const moveToPlaylist = async (playlistId) => {
         class="bg-neutral-900/50 p-4 rounded-xl flex items-center gap-4 hover:bg-neutral-800 transition-colors border border-neutral-800/50 group"
         :class="playerStore.currentTrack?.id === track.id ? 'border-blue-500/60 bg-blue-900/10' : ''"
       >
-        <img v-if="track.cover_url" :src="track.cover_url" alt="Capa" class="w-14 h-14 rounded-md object-cover shadow-md" />
+        <img v-if="track.cover_url" :src="track.cover_url" @error="track.cover_url = null" alt="Capa" class="w-14 h-14 rounded-md object-cover shadow-md" />
         <div v-else class="w-14 h-14 rounded-md bg-neutral-800 flex items-center justify-center shadow-md">
           <Music class="w-5 h-5 text-neutral-500" />
         </div>
@@ -242,6 +250,7 @@ const moveToPlaylist = async (playlistId) => {
 
       </div>
     </div>
+    
     <div v-if="isDownloadingAll" class="fixed bottom-28 right-6 z-[100] bg-neutral-900 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex items-center gap-4 w-72 animate-slide-up">
       <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0 border border-blue-500/30">
         <Download class="w-5 h-5 text-blue-400 animate-pulse" />
