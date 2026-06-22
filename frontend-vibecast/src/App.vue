@@ -22,7 +22,7 @@ const playerStore = usePlayerStore()
     >
       <span class="font-bold text-sm tracking-wide">{{ playerStore.notification.text }}</span>
     </div>
-
+    <Import />
     <div class="flex-1 overflow-hidden pb-24">
       <Splitpanes class="h-full w-full">
         
@@ -32,7 +32,6 @@ const playerStore = usePlayerStore()
         
         <Pane class="bg-transparent">
           <div class="h-full w-full overflow-y-auto p-8 flex flex-col items-center invisible-scrollbar">
-            <Import />
             <TrackList />
           </div>
         </Pane>

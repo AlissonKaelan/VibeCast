@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, Home } from 'lucide-vue-next'
+import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, PlusCircle, Home } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
@@ -90,14 +90,14 @@ const handleSave = async () => {
   }
 }
 
-// NOVO: Prepara a exclusão e abre o Modal
+// Prepara a exclusão e abre o Modal
 const confirmDeletePrompt = (pl, event) => {
   event.stopPropagation()
   playlistToDelete.value = pl
   showDeleteModal.value = true
 }
 
-// NOVO: Executa a exclusão de fato
+// Executa a exclusão de fato
 const executeDelete = async () => {
   if (!playlistToDelete.value) return
   isProcessing.value = true
@@ -161,6 +161,14 @@ onMounted(() => {
         Todas as Músicas
       </div>
     </div>
+
+    <button 
+  @click="playerStore.openImportModal()" 
+  class="w-full flex items-center gap-3 p-3 mt-4 mb-2 rounded-lg cursor-pointer transition-all bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 text-blue-100 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
+>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+  <span class="font-bold">Nova Importação</span>
+</button>
 
     <div class="h-px w-full bg-neutral-800/50 my-1"></div>
 

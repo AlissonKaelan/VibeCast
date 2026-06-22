@@ -12,14 +12,17 @@ export const usePlayerStore = defineStore('player', () => {
   const isSeeking = ref(false)
   let audioPlayer = null 
 
-  // ==========================================
-  // NOVIDADES: Estados da Fila e Modos de Play
-  // ==========================================
-  const queue = ref([])             // A fila real que vai tocar
-  const originalQueue = ref([])     // O backup da ordem original
-  const currentIndex = ref(-1)      // Posição atual na fila
-  const isShuffle = ref(false)      // Botão de Aleatório
-  const loopMode = ref(0)           // 0: Desativado, 1: Repetir Tudo, 2: Repetir Atual
+  // Variável para controlar o Modal de Importação
+  const isImportModalOpen = ref(false)
+  const openImportModal = () => isImportModalOpen.value = true
+  const closeImportModal = () => isImportModalOpen.value = false
+
+  // Estados da Fila e Modos de Play
+  const queue = ref([])             
+  const originalQueue = ref([])    
+  const currentIndex = ref(-1)      
+  const isShuffle = ref(false)      
+  const loopMode = ref(0)        
 
   // 2. Variáveis da Biblioteca
   const savedPlaylists = ref([])
@@ -225,6 +228,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
   return {
+    isImportModalOpen, openImportModal, closeImportModal,
     tracks, currentTrack, isPlaying, currentTime, duration, volume, isSeeking,
     queue, originalQueue, currentIndex, isShuffle, loopMode, // Exportamos as novas variáveis
     savedPlaylists, currentPlaylistId, loadLibrary, loadAllTracks,

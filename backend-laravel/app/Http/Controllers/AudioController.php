@@ -49,16 +49,17 @@ class AudioController extends Controller
         }
     }
 
-    public function downloadTrack($id)
+    public function downloadTrack(Request $request)
     {
-        // 1. Busca a música no banco de dados
-        $track = \App\Models\Track::findOrFail($id);
+        // 1. Busca a música no banco
+        $track = \App\Models\Track::findOrFail($request->track_id);
 
-        // 2. Se já tiver o arquivo, não baixa de novo!
+        // 2. A TRAVA DE SEGURANÇA: Se já tem arquivo, não faz nada!
         if ($track->file_path) {
             return response()->json([
-                'message' => 'A música já está salva no seu PC!',
-                'file_path' => asset('storage/' . $track->file_path)
+                'success' => true,
+                'message' => 'A música já estava baixada.',
+                'file_path' => $track->file_path
             ]);
         }
 
@@ -128,5 +129,67 @@ class AudioController extends Controller
         // O response()->file() do Laravel suporta nativamente HTTP 206 (Byte-Range)
         // É isto que permite à barra de progresso saltar para qualquer parte da música!
         return response()->file($fullPath);
+    }
+
+    public function importPlaylist(Request $request)
+    {
+        $request->validate([
+            'url' => 'required|url'
+        ]);
+
+        try {
+            // 1. Pede para o Python raspar o Spotify
+            $response = \Illuminate\Support\Facades\Http::post('http://python-extractor:5000/import-playlist', [
+                'url' => $request->url
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                
+                // 2. Cria a nova Playlist no banco
+                $playlist = \App\Models\Playlist::create([
+                    'name' => $data['playlist_name'],
+                    'description' => 'Importada via VibeCast'
+                ]);
+
+                // 3. Salva todas as músicas dentro desta playlist
+                foreach ($data['tracks_urls'] as $trackData) {
+                    
+                    // Verifica se já existe uma música com este exato Título e Artista.
+                    // Se existir, pega nela. Se não existir, cria uma nova.
+                    $track = \App\Models\Track::firstOrCreate(
+                        [
+                            'title' => $trackData['title'],
+                            'artist' => $trackData['artist']
+                        ],
+                        [
+                            'cover_url' => $trackData['cover_url'],
+                            'duration_seconds' => $trackData['duration_seconds'] ?? 0
+                        ]
+                    );
+
+                    // Associa a música (nova ou já existente) a esta playlist.
+                    // O 'syncWithoutDetaching' garante que a música não seja adicionada em duplicado à mesma playlist.
+                    $playlist->tracks()->syncWithoutDetaching([$track->id]);
+                }
+
+                // 4. Retorna a mensagem de sucesso para o Vue.js
+                return response()->json([
+                    'message' => "Sucesso! {$data['total_tracks']} músicas salvas no banco.",
+                    'playlist' => $playlist
+                ]);
+            }
+
+            return response()->json([
+                'error' => $response->json('detail') ?? 'Falha ao importar playlist'
+            ], $response->status());
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Erro ao salvar playlist: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Erro interno do servidor: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

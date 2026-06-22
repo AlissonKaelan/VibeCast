@@ -5,7 +5,11 @@ import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
 
-// 🟢 AS VARIÁVEIS QUE FALTAVAM (CORRIGE A TELA BRANCA)
+onMounted(() => {
+  playerStore.loadAllTracks()
+})
+
+// AS VARIÁVEIS QUE FALTAVAM (CORRIGE A TELA BRANCA)
 const showMoveModal = ref(false)
 const trackToMove = ref(null)
 const isMoving = ref(false)

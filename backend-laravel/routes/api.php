@@ -51,3 +51,6 @@ Route::post('/tracks/{id}/reset-file', [\App\Http\Controllers\TrackController::c
 
 // Rota para fazer streaming do áudio com suporte a avançar/recuar
 Route::get('/stream', [\App\Http\Controllers\AudioController::class, 'streamTrack']);
+
+// Rota da ponte de Importação do Spotify
+Route::post('/import-playlist', [\App\Http\Controllers\AudioController::class, 'importPlaylist']);
