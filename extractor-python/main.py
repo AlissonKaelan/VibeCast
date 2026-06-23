@@ -32,7 +32,6 @@ def extract_audio(query: TrackQuery):
     video_id = search_results[0]['videoId']
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
     
-    # 🟢 Rota de Playback também atualizada para OAuth2 (Smart TV)
     ydl_opts = {
         'format': 'bestaudio/best',
         'quiet': True,
@@ -58,12 +57,15 @@ def extract_audio(query: TrackQuery):
 @app.post("/import-playlist")
 def import_playlist(query: PlaylistQuery):
     try:
-        match = re.search(r'playlist/([a-zA-Z0-9]+)', query.url)
+        # 1. Identifica automaticamente se é playlist, album ou track
+        match = re.search(r'(playlist|album|track)/([a-zA-Z0-9]+)', query.url)
         if not match:
-            raise HTTPException(status_code=400, detail="Link inválido. Precisa ser uma URL de playlist do Spotify.")
+            raise HTTPException(status_code=400, detail="Link inválido. Cole uma URL de música, álbum ou playlist do Spotify.")
         
-        playlist_id = match.group(1)
-        embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
+        item_type = match.group(1) # 'playlist', 'album', ou 'track'
+        item_id = match.group(2)
+
+        embed_url = f"https://open.spotify.com/embed/{item_type}/{item_id}"
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
@@ -71,43 +73,58 @@ def import_playlist(query: PlaylistQuery):
         response = requests.get(embed_url, headers=headers)
 
         if response.status_code != 200:
-            raise HTTPException(status_code=400, detail="O Spotify bloqueou a leitura do Iframe.")
+            raise HTTPException(status_code=400, detail="O Spotify bloqueou a leitura da URL.")
 
         soup = BeautifulSoup(response.text, "html.parser")
         script_tag = soup.find("script", id="__NEXT_DATA__")
         if not script_tag:
-            raise HTTPException(status_code=400, detail="JSON de músicas não encontrado no Iframe.")
+            raise HTTPException(status_code=400, detail="JSON de músicas não encontrado na página.")
 
         state_data = json.loads(script_tag.string)
         extracted_tracks = []
-        playlist_name = "Playlist Importada"
+        collection_name = "Importação VibeCast"
 
         def find_tracks(node):
-            nonlocal playlist_name
+            nonlocal collection_name
             if isinstance(node, dict):
-                if node.get('type') == 'playlist' and 'name' in node:
-                    playlist_name = node.get('name')
+                node_type = node.get('type')
+                
+                # Garante que o nome da coleção seja exato ao tipo que o usuário importou
+                if node_type == item_type and 'name' in node:
+                    collection_name = node.get('name')
 
                 uri = node.get('uri', '')
-                if 'title' in node and 'subtitle' in node and uri.startswith('spotify:track:'):
-                    title = node.get('title')
-                    artist = node.get('subtitle') 
-                    cover_url = None
-                    duration = 0 
+                title = None
+                artist = None
 
-                    if 'coverArt' in node:
+                # Verifica se é uma música (pelos dois formatos possíveis do Spotify)
+                if uri.startswith('spotify:track:') or node_type == 'track':
+                    # Formato A: Usado em Playlists e Álbuns
+                    if 'title' in node and 'subtitle' in node:
+                        title = node.get('title')
+                        artist = node.get('subtitle')
+                    # Formato B: Usado em Músicas Únicas (Tracks)
+                    elif 'name' in node and 'artists' in node:
+                        title = node.get('name')
+                        artists_list = node.get('artists', [])
+                        if isinstance(artists_list, list):
+                            # Junta os nomes de todos os artistas com vírgula
+                            artist = ", ".join([a.get('name', '') for a in artists_list if isinstance(a, dict)])
+
+                if title and artist:
+                    cover_url = None
+                    if 'coverArt' in node and isinstance(node['coverArt'], dict):
                         sources = node['coverArt'].get('sources', [])
-                        if sources:
+                        if sources and isinstance(sources, list):
                             cover_url = sources[0].get('url')
 
-                    if title:
-                        extracted_tracks.append({
-                            "title": title,
-                            "artist": artist,
-                            "cover_url": cover_url,
-                            "duration_seconds": duration,
-                            "youtube_id": None
-                        })
+                    extracted_tracks.append({
+                        "title": title,
+                        "artist": artist,
+                        "cover_url": cover_url,
+                        "duration_seconds": 0,
+                        "youtube_id": None
+                    })
 
                 for key, value in node.items():
                     find_tracks(value)
@@ -117,19 +134,19 @@ def import_playlist(query: PlaylistQuery):
 
         find_tracks(state_data)
 
+        # Remove duplicatas caso o JSON repita informações
         unique_tracks = {t['title'] + t['artist']: t for t in extracted_tracks}.values()
         extracted_tracks = list(unique_tracks)
 
         return {
-            "playlist_name": playlist_name,
+            "playlist_name": collection_name,
             "total_tracks": len(extracted_tracks),
             "tracks_urls": extracted_tracks,
-            "message": f"Sucesso! {len(extracted_tracks)} músicas extraídas via Iframe."
+            "message": f"Sucesso! {len(extracted_tracks)} músicas extraídas."
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao raspar a playlist: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"Erro ao raspar o Spotify: {str(e)}")
 class DownloadQuery(BaseModel):
     title: str
     artist: str
@@ -151,7 +168,6 @@ def download_track(query: DownloadQuery):
         file_name = f"{safe_artist}_{safe_title}_{video_id}".lower()
         output_template = f"/app/musicas/{file_name}.%(ext)s"
         
-        # 🟢 Rota de Download limpa e formatada
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
