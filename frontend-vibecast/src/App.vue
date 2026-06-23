@@ -6,7 +6,8 @@ import 'splitpanes/dist/splitpanes.css'
 import Sidebar from './components/Sidebar.vue'
 import Import from './components/Import.vue'
 import TrackList from './components/TrackList.vue'
-import PlayerBar from './components/PlayerBar.vue' // <-- FALTAVA ESTA LINHA!
+import PlayerBar from './components/PlayerBar.vue'
+import QueuePanel from './components/QueuePanel.vue'
 
 import { usePlayerStore } from './stores/playerStore'
 const playerStore = usePlayerStore()
@@ -42,6 +43,9 @@ const playerStore = usePlayerStore()
     <div class="fixed bottom-0 left-0 right-0 h-24 bg-black/80 backdrop-blur-lg border-t border-neutral-800 z-50">
       <PlayerBar />
     </div>
+
+    <Import />
+    <QueuePanel />
   </div>
 </template>
 
