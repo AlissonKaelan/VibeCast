@@ -1,12 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, PlusCircle, Home } from 'lucide-vue-next'
+import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, Home } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
-
-const savedPlaylists = ref([])
-const currentPlaylistId = ref(null)
 
 // Controle do Modal Inteligente (Criação/Edição)
 const showModal = ref(false)
@@ -16,20 +13,27 @@ const playlistName = ref('')
 const playlistDescription = ref('')
 const isProcessing = ref(false)
 
-// NOVO: Controle do Modal de Exclusão
+// Controle do Modal de Exclusão
 const showDeleteModal = ref(false)
 const playlistToDelete = ref(null)
 
-
+// 1. Função para abrir uma Playlist e gravar o ID
 const selectPlaylist = async (playlistId) => {
-  currentPlaylistId.value = playlistId
+  playerStore.currentPlaylistId = playlistId; // <-- ATIVA O BOTÃO DO ZIP
+  
   try {
-    const response = await fetch(`http://localhost:8000/api/playlists/${playlistId}`)
-    const data = await response.json()
-    playerStore.tracks = data.tracks 
+    const response = await fetch(`http://localhost:8000/api/playlists/${playlistId}`);
+    const data = await response.json();
+    playerStore.tracks = data.tracks; 
   } catch (error) {
-    console.error("Erro ao carregar músicas da playlist:", error)
+    console.error("Erro ao carregar músicas:", error);
   }
+}
+
+// 2. Função para o botão "Todas as Músicas" (Limpa o ID)
+const loadAll = () => {
+  playerStore.currentPlaylistId = null; // <-- DESATIVA O BOTÃO DO ZIP
+  playerStore.loadAllTracks();
 }
 
 const openCreateModal = () => {
@@ -110,12 +114,12 @@ const executeDelete = async () => {
 
     if (!response.ok) throw new Error('Erro ao excluir playlist')
 
-    if (currentPlaylistId.value === playlistToDelete.value.id) {
-      currentPlaylistId.value = null
+    if (playerStore.currentPlaylistId === playlistToDelete.value.id) {
+      playerStore.currentPlaylistId = null
       playerStore.tracks = []
     }
 
-    await loadLibrary()
+    await playerStore.loadLibrary()
     showDeleteModal.value = false
   } catch (error) {
     alert("Erro ao excluir: " + error.message)
@@ -149,7 +153,7 @@ onMounted(() => {
     </div>
 
     <div 
-      @click="playerStore.loadAllTracks()"
+      @click="loadAll"
       class="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all mb-2 mt-2"
       :class="playerStore.currentPlaylistId === null ? 'bg-blue-600/20 border border-blue-500/50' : 'hover:bg-neutral-900/50'"
     >
@@ -163,12 +167,12 @@ onMounted(() => {
     </div>
 
     <button 
-  @click="playerStore.openImportModal()" 
-  class="w-full flex items-center gap-3 p-3 mt-4 mb-2 rounded-lg cursor-pointer transition-all bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 text-blue-100 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
->
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-  <span class="font-bold">Nova Importação</span>
-</button>
+      @click="playerStore.openImportModal()" 
+      class="w-full flex items-center gap-3 p-3 mt-4 mb-2 rounded-lg cursor-pointer transition-all bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 text-blue-100 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+      <span class="font-bold">Nova Importação</span>
+    </button>
 
     <div class="h-px w-full bg-neutral-800/50 my-1"></div>
 

@@ -21,8 +21,10 @@ const updateVolume = (event) => { playerStore.setVolume(Number(event.target.valu
   >
     <div class="flex items-center gap-4 w-1/4 min-w-[180px]">
       <img 
-        :src="playerStore.currentTrack.cover_url || 'https://images.unsplash.com/photo-1614680376593-902f74fa0d41?w=100&auto=format&fit=crop'" 
-        class="w-14 h-14 rounded-md object-cover shadow" 
+        :src="playerStore.currentTrack?.cover_url || 'https://placehold.co/100x100/262626/888?text=🎵'" 
+        @error="$event.target.src = 'https://placehold.co/100x100/262626/888?text=🎵'"
+        alt="Capa" 
+        class="w-14 h-14 rounded-md object-cover shadow-lg bg-neutral-800" 
       />
       <div class="overflow-hidden">
         <h4 class="font-bold text-sm truncate text-white">{{ playerStore.currentTrack.title }}</h4>

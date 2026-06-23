@@ -120,7 +120,11 @@ const moveToPlaylist = async (playlistId) => {
 }
 
 const exportToPendrive = () => {
-  if (!playerStore.currentPlaylistId) return;
+  if (!playerStore.currentPlaylistId) {
+    alert("ERRO: O sistema acha que você não está dentro de uma playlist (ID está nulo). Clique em uma playlist no menu lateral primeiro!");
+    return;
+  }
+  
   playerStore.notify('A compactar músicas. O download vai começar em breve!', 'success');
   window.open(`http://localhost:8000/api/playlists/${playerStore.currentPlaylistId}/export`, '_blank');
 }
@@ -135,7 +139,7 @@ const exportToPendrive = () => {
         <div class="flex gap-3">
           
           <button 
-            v-if="playerStore.currentPlaylistId"
+            
             @click="exportToPendrive"
             class="bg-emerald-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform flex items-center gap-2 text-sm shadow-lg shadow-emerald-900/20"
           >
@@ -162,7 +166,13 @@ const exportToPendrive = () => {
         class="bg-neutral-900/50 p-4 rounded-xl flex items-center gap-4 hover:bg-neutral-800 transition-colors border border-neutral-800/50 group"
         :class="playerStore.currentTrack?.id === track.id ? 'border-blue-500/60 bg-blue-900/10' : ''"
       >
-        <img v-if="track.cover_url" :src="track.cover_url" @error="track.cover_url = null" alt="Capa" class="w-14 h-14 rounded-md object-cover shadow-md" />
+        <img 
+          v-if="track.cover_url" 
+          :src="track.cover_url" 
+          @error="$event.target.src = 'https://placehold.co/100x100/262626/888?text=🎵'" 
+          alt="Capa" 
+          class="w-14 h-14 rounded-md object-cover shadow-md" 
+        />
         <div v-else class="w-14 h-14 rounded-md bg-neutral-800 flex items-center justify-center shadow-md">
           <Music class="w-5 h-5 text-neutral-500" />
         </div>
