@@ -106,4 +106,4 @@ const nextTracks = computed(() => {
 <style scoped>
 .invisible-scrollbar::-webkit-scrollbar { display: none; }
 .invisible-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-</style>
+</style> 
