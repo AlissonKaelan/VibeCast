@@ -23,6 +23,15 @@ export const usePlayerStore = defineStore('player', () => {
       playTrack(queue.value[index], [], true)
     }
   }
+  // Remove uma música específica da fila
+  const removeFromQueue = (absoluteIndex) => {
+    queue.value.splice(absoluteIndex, 1)
+  }
+  // Troca a posição de duas músicas na fila (Drag & Drop)
+  const reorderQueue = (oldAbsoluteIndex, newAbsoluteIndex) => {
+    const item = queue.value.splice(oldAbsoluteIndex, 1)[0]
+    queue.value.splice(newAbsoluteIndex, 0, item)
+  }
   const openImportModal = () => isImportModalOpen.value = true
   const closeImportModal = () => isImportModalOpen.value = false
 
@@ -202,9 +211,7 @@ export const usePlayerStore = defineStore('player', () => {
     loopMode.value = (loopMode.value + 1) % 3
   }
 
-  // ===============================
-  // NOVOS CONTROLES DE REPRODUÇÃO
-  // ===============================
+  // CONTROLES DE REPRODUÇÃO
   const toggleShuffle = () => {
     isShuffle.value = !isShuffle.value
     
@@ -239,9 +246,9 @@ export const usePlayerStore = defineStore('player', () => {
   return {
     isImportModalOpen, openImportModal, closeImportModal,
     tracks, currentTrack, isPlaying, currentTime, duration, volume, isSeeking,
-    queue, originalQueue, currentIndex, isShuffle, loopMode, // Exportamos as novas variáveis
+    queue, originalQueue, currentIndex, isShuffle, loopMode,
     savedPlaylists, currentPlaylistId, loadLibrary, loadAllTracks,
-    notification, notify, isQueueOpen, toggleQueue, jumpToQueueIndex,
-    playTrack, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek // Exportamos os novos métodos
+    notification, notify, isQueueOpen, toggleQueue, jumpToQueueIndex, removeFromQueue, reorderQueue,
+    playTrack, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek
   }
 })

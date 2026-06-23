@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue'
-import { X, Music, Play, ListMusic } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
+import { X, Music, Play, ListMusic, Trash2, GripVertical } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
@@ -10,6 +10,28 @@ const nextTracks = computed(() => {
   if (!playerStore.queue || playerStore.queue.length === 0) return []
   return playerStore.queue.slice(playerStore.currentIndex + 1)
 })
+
+// --- LÓGICA DE DRAG & DROP NATIVA ---
+const draggedIndex = ref(null)
+
+const onDragStart = (index) => {
+  draggedIndex.value = index
+}
+
+const onDrop = (dropIndex) => {
+  if (draggedIndex.value !== null && draggedIndex.value !== dropIndex) {
+    // Converte os índices da lista "A Seguir" para os índices reais da Fila completa
+    const absoluteOld = playerStore.currentIndex + 1 + draggedIndex.value
+    const absoluteNew = playerStore.currentIndex + 1 + dropIndex
+    playerStore.reorderQueue(absoluteOld, absoluteNew)
+  }
+  draggedIndex.value = null
+}
+
+const removeTrack = (index) => {
+  const absoluteIndex = playerStore.currentIndex + 1 + index
+  playerStore.removeFromQueue(absoluteIndex)
+}
 </script>
 
 <template>
@@ -23,7 +45,6 @@ const nextTracks = computed(() => {
     class="fixed top-0 right-0 h-full w-full sm:w-80 bg-neutral-900 border-l border-neutral-800 z-[130] flex flex-col transition-transform duration-300 shadow-2xl"
     :class="playerStore.isQueueOpen ? 'translate-x-0' : 'translate-x-full'"
   >
-    
     <div class="p-5 flex items-center justify-between border-b border-neutral-800">
       <div class="flex items-center gap-2">
         <ListMusic class="w-5 h-5 text-neutral-400" />
@@ -79,10 +100,17 @@ const nextTracks = computed(() => {
             <div 
               v-for="(track, index) in nextTracks" 
               :key="track.id + '-' + index"
-              @click="playerStore.jumpToQueueIndex(playerStore.currentIndex + 1 + index)"
-              class="flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-800 transition-colors cursor-pointer group"
+              draggable="true"
+              @dragstart="onDragStart(index)"
+              @dragover.prevent
+              @drop="onDrop(index)"
+              class="flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-800 transition-colors group"
             >
-              <div class="relative w-10 h-10 flex-shrink-0">
+              <div class="cursor-grab text-neutral-600 hover:text-white active:cursor-grabbing">
+                <GripVertical class="w-4 h-4" />
+              </div>
+
+              <div class="relative w-10 h-10 flex-shrink-0 cursor-pointer" @click="playerStore.jumpToQueueIndex(playerStore.currentIndex + 1 + index)">
                 <img 
                   :src="track.cover_url || 'https://placehold.co/100x100/262626/888?text=🎵'" 
                   @error="$event.target.src = 'https://placehold.co/100x100/262626/888?text=🎵'"
@@ -90,10 +118,18 @@ const nextTracks = computed(() => {
                 />
                 <Play class="absolute inset-0 m-auto w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <div class="flex-1 overflow-hidden">
+              <div class="flex-1 overflow-hidden cursor-pointer" @click="playerStore.jumpToQueueIndex(playerStore.currentIndex + 1 + index)">
                 <h5 class="text-sm font-semibold text-neutral-200 group-hover:text-white truncate">{{ track.title }}</h5>
                 <p class="text-[11px] text-neutral-500 truncate">{{ track.artist }}</p>
               </div>
+
+              <button 
+                @click.stop="removeTrack(index)" 
+                class="opacity-0 group-hover:opacity-100 p-1.5 text-neutral-500 hover:text-red-400 transition-all hover:bg-neutral-700 rounded-full"
+                title="Remover da fila"
+              >
+                <Trash2 class="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
