@@ -14,6 +14,15 @@ export const usePlayerStore = defineStore('player', () => {
 
   // Variável para controlar o Modal de Importação
   const isImportModalOpen = ref(false)
+  const isQueueOpen = ref(false)
+  const toggleQueue = () => isQueueOpen.value = !isQueueOpen.value
+  // Função para pular para uma música específica clicando na Fila
+  const jumpToQueueIndex = (index) => {
+    if (index >= 0 && index < queue.value.length) {
+      currentIndex.value = index
+      playTrack(queue.value[index], [], true)
+    }
+  }
   const openImportModal = () => isImportModalOpen.value = true
   const closeImportModal = () => isImportModalOpen.value = false
 
@@ -232,7 +241,7 @@ export const usePlayerStore = defineStore('player', () => {
     tracks, currentTrack, isPlaying, currentTime, duration, volume, isSeeking,
     queue, originalQueue, currentIndex, isShuffle, loopMode, // Exportamos as novas variáveis
     savedPlaylists, currentPlaylistId, loadLibrary, loadAllTracks,
-    notification, notify,
+    notification, notify, isQueueOpen, toggleQueue, jumpToQueueIndex,
     playTrack, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek // Exportamos os novos métodos
   }
 })

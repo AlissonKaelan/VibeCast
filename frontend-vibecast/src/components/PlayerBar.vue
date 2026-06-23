@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, Music } from 'lucide-vue-next'
+import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, Music, List } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
@@ -145,6 +145,14 @@ const updateVolume = (event) => {
     </div>
 
     <div class="flex items-center gap-3 w-1/4 justify-end min-w-[150px]">
+      <button 
+        @click="playerStore.toggleQueue" 
+        :class="playerStore.isQueueOpen ? 'text-blue-500' : 'text-neutral-400 hover:text-white'"
+        class="transition-colors mr-2 focus:outline-none"
+        title="Fila de Reprodução"
+      >
+        <List class="w-5 h-5" />
+      </button>
       <button @click="playerStore.toggleMute" class="text-neutral-400 hover:text-white transition-colors focus:outline-none">
         <VolumeX v-if="playerStore.volume === 0" class="w-4 h-4" />
         <Volume2 v-else class="w-4 h-4" />
