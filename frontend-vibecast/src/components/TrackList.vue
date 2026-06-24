@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { Download, Loader2, Music, Play, Pause, FolderPlus, X, DownloadCloud } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue'
+import { Download, Loader2, Music, Play, Pause, FolderPlus, X, DownloadCloud, Search } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
@@ -10,7 +10,6 @@ onMounted(() => {
   playerStore.loadAllTracks()
 })
 
-// AS VARIÁVEIS QUE FALTAVAM (CORRIGE A TELA BRANCA)
 const showMoveModal = ref(false)
 const trackToMove = ref(null)
 const isMoving = ref(false)
@@ -21,9 +20,22 @@ const isDownloadingAll = ref(false)
 const batchTotal = ref(0)
 const batchCompleted = ref(0)
 
-// ---------------------------------------------------------
+// LÓGICA DE BUSCA
+const searchQuery = ref('')
+
+const filteredTracks = computed(() => {
+  // Se não tem nada digitado, devolve todas as músicas originais
+  if (!searchQuery.value.trim()) return playerStore.tracks
+
+  const query = searchQuery.value.toLowerCase()
+  return playerStore.tracks.filter(track => {
+    const titleMatch = track.title?.toLowerCase().includes(query)
+    const artistMatch = track.artist?.toLowerCase().includes(query)
+    return titleMatch || artistMatch
+  })
+})
+
 // FUNÇÕES DE DOWNLOAD
-// ---------------------------------------------------------
 const downloadAudio = async (trackId, isBatch = false) => {
   downloadingTracks.value[trackId] = true 
   try {
@@ -82,9 +94,7 @@ const downloadAll = async () => {
   playerStore.notify(`Sucesso! ${batchTotal.value} músicas baixadas.`, 'success');
 }
 
-// ---------------------------------------------------------
 // FUNÇÕES DE PLAYLIST E EXPORTAÇÃO
-// ---------------------------------------------------------
 const openMoveModal = async (track) => {
   trackToMove.value = track
   await playerStore.loadLibrary()
@@ -133,13 +143,32 @@ const exportToPendrive = () => {
 <template>
   <div class="w-full mt-12 px-4">
     <div class="mb-6 border-b border-neutral-800 pb-4">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <h3 class="text-2xl font-bold">Faixas Musicais</h3>
+      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4">
         
-        <div class="flex gap-3">
-          
+        <h3 class="text-2xl font-bold flex-shrink-0">Faixas Musicais</h3>
+        
+        <div class="relative w-full max-w-md xl:mx-auto">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search class="w-4 h-4 text-neutral-500" />
+          </div>
+          <input 
+            v-model="searchQuery"
+            type="text" 
+            placeholder="Buscar por título ou artista..." 
+            class="w-full bg-neutral-900/80 border border-neutral-800 text-white rounded-full py-2.5 pl-11 pr-10 focus:outline-none focus:border-blue-500/50 focus:bg-neutral-900 focus:ring-1 focus:ring-blue-500/50 transition-all text-sm placeholder-neutral-500 shadow-inner"
+          />
           <button 
-            
+            v-if="searchQuery" 
+            @click="searchQuery = ''" 
+            class="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-500 hover:text-white transition-colors"
+            title="Limpar busca"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <div class="flex gap-3 flex-shrink-0">
+          <button 
             @click="exportToPendrive"
             class="bg-emerald-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform flex items-center gap-2 text-sm shadow-lg shadow-emerald-900/20"
           >
@@ -156,13 +185,12 @@ const exportToPendrive = () => {
             <Download v-else class="w-4 h-4" />
             {{ isDownloadingAll ? 'A Transferir...' : 'Transferir Todas' }}
           </button>
-          
         </div>
       </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div v-for="(track, index) in playerStore.tracks" :key="track.id"
+      <div v-for="(track, index) in filteredTracks" :key="track.id"
         class="bg-neutral-900/50 p-4 rounded-xl flex items-center gap-4 hover:bg-neutral-800 transition-colors border border-neutral-800/50 group"
         :class="playerStore.currentTrack?.id === track.id ? 'border-blue-500/60 bg-blue-900/10' : ''"
       >
@@ -206,7 +234,7 @@ const exportToPendrive = () => {
 
           <button 
             v-if="track.file_path"
-            @click="playerStore.playTrack(track, playerStore.tracks)"
+            @click="playerStore.playTrack(track, filteredTracks)"
             class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center transition-transform hover:scale-105 shadow-[0_0_10px_rgba(37,99,235,0.3)]"
           >
             <Pause v-if="playerStore.currentTrack?.id === track.id && playerStore.isPlaying" class="w-4 h-4 fill-white" />
@@ -223,6 +251,16 @@ const exportToPendrive = () => {
       <h3 class="text-xl font-bold text-white mb-2">Nada por aqui!</h3>
       <p class="text-sm text-neutral-400 max-w-sm">
         Esta playlist está vazia ou você ainda não importou nenhuma música. Vá em "Todas as Músicas" para adicionar.
+      </p>
+    </div>
+
+    <div v-else-if="filteredTracks.length === 0" class="flex flex-col items-center justify-center py-20 text-center w-full">
+      <div class="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-4 shadow-inner">
+        <Search class="w-10 h-10 text-neutral-600" />
+      </div>
+      <h3 class="text-xl font-bold text-white mb-2">Nenhum resultado</h3>
+      <p class="text-sm text-neutral-400 max-w-sm">
+        Não encontramos nenhuma música com "<span class="text-white">{{ searchQuery }}</span>" nesta lista.
       </p>
     </div>
 
