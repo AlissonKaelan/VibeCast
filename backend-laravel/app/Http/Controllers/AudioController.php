@@ -248,9 +248,11 @@ class AudioController extends Controller
 
     public function importSoundcloud(Request $request)
     {
+        set_time_limit(300);
+
         $request->validate(['url' => 'required|url']);
 
-        $response = \Illuminate\Support\Facades\Http::post('http://python-extractor:5000/import-soundcloud', [
+        $response = \Illuminate\Support\Facades\Http::timeout(300)->post('http://python-extractor:5000/import-soundcloud', [
             'url' => $request->url
         ]);
 
@@ -266,16 +268,21 @@ class AudioController extends Controller
         ]);
 
         foreach ($data['tracks_urls'] as $trackData) {
+            if (empty($trackData['soundcloud_url'])) {
+                continue;
+            }
+
             $track = \App\Models\Track::firstOrCreate(
-                ['title' => $trackData['title'], 'artist' => $trackData['artist']],
+                ['youtube_id' => $trackData['soundcloud_url']],
                 [
+                    'title' => $trackData['title'],
+                    'artist' => $trackData['artist'],
                     'cover_url' => $trackData['cover_url'] ?? null,
                     'duration_seconds' => $trackData['duration_seconds'] ?? 0,
-                    // O SEGREDO: Guardamos o link do SoundCloud na coluna do YouTube
-                    'youtube_id' => $trackData['soundcloud_url'] ?? null 
                 ]
             );
-            $playlist->tracks()->attach($track->id);
+            
+            $playlist->tracks()->syncWithoutDetaching([$track->id]);
         }
 
         return response()->json(['message' => $data['message'], 'playlist' => $playlist]);

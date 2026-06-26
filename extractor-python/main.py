@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import json
 import os
 import re
+import hashlib
 
 app = FastAPI(title="VibeCast Extractor API")
 ytmusic = YTMusic()
@@ -17,6 +18,18 @@ class TrackQuery(BaseModel):
 
 class PlaylistQuery(BaseModel):
     url: str
+
+class SoundCloudQuery(BaseModel):
+    url: str
+
+class DownloadDirectQuery(BaseModel):
+    title: str
+    artist: str
+    url: str
+
+class DownloadQuery(BaseModel):
+    title: str
+    artist: str
 
 @app.get("/")
 def read_root():
@@ -57,14 +70,12 @@ def extract_audio(query: TrackQuery):
 @app.post("/import-playlist")
 def import_playlist(query: PlaylistQuery):
     try:
-        # 1. Identifica automaticamente se é playlist, album ou track
         match = re.search(r'(playlist|album|track)/([a-zA-Z0-9]+)', query.url)
         if not match:
-            raise HTTPException(status_code=400, detail="Link inválido. Cole uma URL de música, álbum ou playlist do Spotify.")
+            raise HTTPException(status_code=400, detail="Link inválido do Spotify.")
         
-        item_type = match.group(1) # 'playlist', 'album', ou 'track'
+        item_type = match.group(1)
         item_id = match.group(2)
-
         embed_url = f"https://open.spotify.com/embed/{item_type}/{item_id}"
 
         headers = {
@@ -78,7 +89,7 @@ def import_playlist(query: PlaylistQuery):
         soup = BeautifulSoup(response.text, "html.parser")
         script_tag = soup.find("script", id="__NEXT_DATA__")
         if not script_tag:
-            raise HTTPException(status_code=400, detail="JSON de músicas não encontrado na página.")
+            raise HTTPException(status_code=400, detail="JSON de músicas não encontrado.")
 
         state_data = json.loads(script_tag.string)
         extracted_tracks = []
@@ -88,8 +99,6 @@ def import_playlist(query: PlaylistQuery):
             nonlocal collection_name
             if isinstance(node, dict):
                 node_type = node.get('type')
-                
-                # Garante que o nome da coleção seja exato ao tipo que o usuário importou
                 if node_type == item_type and 'name' in node:
                     collection_name = node.get('name')
 
@@ -97,18 +106,14 @@ def import_playlist(query: PlaylistQuery):
                 title = None
                 artist = None
 
-                # Verifica se é uma música (pelos dois formatos possíveis do Spotify)
                 if uri.startswith('spotify:track:') or node_type == 'track':
-                    # Formato A: Usado em Playlists e Álbuns
                     if 'title' in node and 'subtitle' in node:
                         title = node.get('title')
                         artist = node.get('subtitle')
-                    # Formato B: Usado em Músicas Únicas (Tracks)
                     elif 'name' in node and 'artists' in node:
                         title = node.get('name')
                         artists_list = node.get('artists', [])
                         if isinstance(artists_list, list):
-                            # Junta os nomes de todos os artistas com vírgula
                             artist = ", ".join([a.get('name', '') for a in artists_list if isinstance(a, dict)])
 
                 if title and artist:
@@ -133,8 +138,6 @@ def import_playlist(query: PlaylistQuery):
                     find_tracks(item)
 
         find_tracks(state_data)
-
-        # Remove duplicatas caso o JSON repita informações
         unique_tracks = {t['title'] + t['artist']: t for t in extracted_tracks}.values()
         extracted_tracks = list(unique_tracks)
 
@@ -144,12 +147,9 @@ def import_playlist(query: PlaylistQuery):
             "tracks_urls": extracted_tracks,
             "message": f"Sucesso! {len(extracted_tracks)} músicas extraídas."
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao raspar o Spotify: {str(e)}")
-class DownloadQuery(BaseModel):
-    title: str
-    artist: str
+
 
 @app.post("/download-track")
 def download_track(query: DownloadQuery):
@@ -158,7 +158,10 @@ def download_track(query: DownloadQuery):
         search_results = ytmusic.search(query=search_query, filter="songs", limit=1)
         
         if not search_results:
-            raise HTTPException(status_code=404, detail="Música não encontrada.")
+            search_results = ytmusic.search(query=search_query, filter="videos", limit=1)
+            
+        if not search_results:
+            raise HTTPException(status_code=404, detail="Música não encontrada no YouTube Music.")
             
         video_id = search_results[0]['videoId']
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -192,49 +195,57 @@ def download_track(query: DownloadQuery):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==========================================
-# INTEGRAÇÃO SOUNDCLOUD
-# ==========================================
-
-class SoundCloudQuery(BaseModel):
-    url: str
-
 @app.post("/import-soundcloud")
 def import_soundcloud(query: SoundCloudQuery):
     try:
-        # Usamos o yt-dlp apenas para extrair as informações (sem baixar o áudio ainda)
+        clean_url = query.url.split('?')[0]
+
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            'extract_flat': True # Extrai apenas metadados rapidamente
+            'extract_flat': False,
+            'ignoreerrors': True 
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(query.url, download=False)
-            
+            info = ydl.extract_info(clean_url, download=False)
             tracks = []
             
-            # Verifica se é uma Playlist/Set ou uma Música Única
+            # Como usamos ignoreerrors, o info pode voltar vazio se o link inteiro for inválido
+            if not info:
+                raise HTTPException(status_code=400, detail="A playlist está totalmente bloqueada ou inválida.")
+
             if 'entries' in info:
-                # É uma Playlist
                 collection_name = info.get('title', 'Playlist do SoundCloud')
-                for entry in info['entries']:
+                for i, entry in enumerate(info['entries']):
+                    # Se o ignoreerrors pulou uma música com DRM, o entry vem como "None" (Nulo).
+                    if not entry:
+                        continue 
+                        
+                    title = entry.get('title')
+                    
+                    if not title:
+                        continue # Pula completamente faixas apagadas
+                        
                     tracks.append({
-                        "title": entry.get('title'),
-                        "artist": entry.get('uploader', 'Artista Desconhecido'),
+                        "title": title,
+                        "artist": entry.get('uploader') or entry.get('channel') or 'Artista Desconhecido',
                         "cover_url": entry.get('thumbnail') or info.get('thumbnail'),
                         "duration_seconds": entry.get('duration', 0),
-                        "soundcloud_url": entry.get('url')
+                        "soundcloud_url": entry.get('webpage_url') or entry.get('url')
                     })
             else:
-                # É uma Música Única
-                collection_name = info.get('title', 'Faixa do SoundCloud')
+                title = info.get('title')
+                if not title:
+                    raise HTTPException(status_code=400, detail="A faixa é privada ou não possui título válido.")
+                    
+                collection_name = title
                 tracks.append({
-                    "title": info.get('title'),
-                    "artist": info.get('uploader', 'Artista Desconhecido'),
+                    "title": title,
+                    "artist": info.get('uploader') or info.get('channel') or 'Artista Desconhecido',
                     "cover_url": info.get('thumbnail'),
                     "duration_seconds": info.get('duration', 0),
-                    "soundcloud_url": info.get('webpage_url') or query.url
+                    "soundcloud_url": info.get('webpage_url') or clean_url
                 })
                 
             return {
@@ -248,19 +259,12 @@ def import_soundcloud(query: SoundCloudQuery):
         raise HTTPException(status_code=500, detail=f"Erro ao raspar o SoundCloud: {str(e)}")
 
 
-class DownloadDirectQuery(BaseModel):
-    title: str
-    artist: str
-    url: str # A URL direta do SoundCloud
-
 @app.post("/download-direct")
 def download_direct(query: DownloadDirectQuery):
     try:
         safe_title = re.sub(r'[^a-zA-Z0-9]', '_', query.title)
         safe_artist = re.sub(r'[^a-zA-Z0-9]', '_', query.artist)
         
-        # Cria um nome de ficheiro único
-        import hashlib
         url_hash = hashlib.md5(query.url.encode()).hexdigest()[:6]
         file_name = f"sc_{safe_artist}_{safe_title}_{url_hash}".lower()
         output_template = f"/app/musicas/{file_name}.%(ext)s"
