@@ -190,3 +190,98 @@ def download_track(query: DownloadQuery):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# INTEGRAÇÃO SOUNDCLOUD
+# ==========================================
+
+class SoundCloudQuery(BaseModel):
+    url: str
+
+@app.post("/import-soundcloud")
+def import_soundcloud(query: SoundCloudQuery):
+    try:
+        # Usamos o yt-dlp apenas para extrair as informações (sem baixar o áudio ainda)
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True # Extrai apenas metadados rapidamente
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query.url, download=False)
+            
+            tracks = []
+            
+            # Verifica se é uma Playlist/Set ou uma Música Única
+            if 'entries' in info:
+                # É uma Playlist
+                collection_name = info.get('title', 'Playlist do SoundCloud')
+                for entry in info['entries']:
+                    tracks.append({
+                        "title": entry.get('title'),
+                        "artist": entry.get('uploader', 'Artista Desconhecido'),
+                        "cover_url": entry.get('thumbnail') or info.get('thumbnail'),
+                        "duration_seconds": entry.get('duration', 0),
+                        "soundcloud_url": entry.get('url')
+                    })
+            else:
+                # É uma Música Única
+                collection_name = info.get('title', 'Faixa do SoundCloud')
+                tracks.append({
+                    "title": info.get('title'),
+                    "artist": info.get('uploader', 'Artista Desconhecido'),
+                    "cover_url": info.get('thumbnail'),
+                    "duration_seconds": info.get('duration', 0),
+                    "soundcloud_url": info.get('webpage_url') or query.url
+                })
+                
+            return {
+                "playlist_name": collection_name,
+                "total_tracks": len(tracks),
+                "tracks_urls": tracks,
+                "message": f"Sucesso! {len(tracks)} músicas extraídas do SoundCloud."
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao raspar o SoundCloud: {str(e)}")
+
+
+class DownloadDirectQuery(BaseModel):
+    title: str
+    artist: str
+    url: str # A URL direta do SoundCloud
+
+@app.post("/download-direct")
+def download_direct(query: DownloadDirectQuery):
+    try:
+        safe_title = re.sub(r'[^a-zA-Z0-9]', '_', query.title)
+        safe_artist = re.sub(r'[^a-zA-Z0-9]', '_', query.artist)
+        
+        # Cria um nome de ficheiro único
+        import hashlib
+        url_hash = hashlib.md5(query.url.encode()).hexdigest()[:6]
+        file_name = f"sc_{safe_artist}_{safe_title}_{url_hash}".lower()
+        output_template = f"/app/musicas/{file_name}.%(ext)s"
+        
+        ydl_opts = {
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+            'outtmpl': output_template,
+            'quiet': False,
+            'no_warnings': True,
+            'cookiefile': '/app/cookies.txt'
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query.url, download=True)
+            ext = info.get('ext', 'm4a')
+            db_file_path = f"musicas/{file_name}.{ext}"
+            
+            return {
+                "success": True,
+                "file_path": db_file_path
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

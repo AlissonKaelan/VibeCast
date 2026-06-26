@@ -56,3 +56,5 @@ Route::get('/stream', [\App\Http\Controllers\AudioController::class, 'streamTrac
 Route::post('/import-playlist', [\App\Http\Controllers\AudioController::class, 'importPlaylist']);
 // Rota para exportar a playlist inteira em .zip para o Pendrive
 Route::get('/playlists/{id}/export', [\App\Http\Controllers\AudioController::class, 'exportPlaylist']);
+
+Route::post('/import-soundcloud', [App\Http\Controllers\AudioController::class, 'importSoundcloud']);

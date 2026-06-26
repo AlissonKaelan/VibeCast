@@ -51,10 +51,8 @@ class AudioController extends Controller
 
     public function downloadTrack(Request $request, $id)
     {
-        // 1. Busca a música variável $id diretamente
         $track = \App\Models\Track::findOrFail($id);
 
-        // 2. A TRAVA DE SEGURANÇA: Se já tem arquivo, não faz nada!
         if ($track->file_path) {
             return response()->json([
                 'success' => true,
@@ -63,27 +61,34 @@ class AudioController extends Controller
             ]);
         }
 
-        // 3. Pede para o Python fazer o trabalho pesado
-        $response = \Illuminate\Support\Facades\Http::retry(3, 1000)
-            ->post('http://python-extractor:5000/download-track', [
-                'title' => $track->title,
-                'artist' => $track->artist
-            ]);
+        // A MÁGICA DA DECISÃO
+        // Se o youtube_id for um link (começa com http), é SoundCloud!
+        if (str_starts_with($track->youtube_id ?? '', 'http')) {
+            $response = \Illuminate\Support\Facades\Http::retry(3, 1000)
+                ->post('http://python-extractor:5000/download-direct', [
+                    'title' => $track->title,
+                    'artist' => $track->artist,
+                    'url' => $track->youtube_id
+                ]);
+        } else {
+            // Se não, pesquisa e baixa do YouTube Music
+            $response = \Illuminate\Support\Facades\Http::retry(3, 1000)
+                ->post('http://python-extractor:5000/download-track', [
+                    'title' => $track->title,
+                    'artist' => $track->artist
+                ]);
+        }
 
         if ($response->failed()) {
-            // Captura a mensagem de erro detalhada vinda do Python
             $errorDetail = $response->json('detail') ?? 'Erro desconhecido no Python';
             return response()->json(['error' => $errorDetail], 500);
         }
 
         $data = $response->json();
 
-        // --- A MÁGICA ACONTECE AQUI ---
-        // Pega o caminho "/app/musicas/..." e remove o "/app/"
         $caminhoSujo = $data['file_path'];
         $caminhoLimpo = str_replace('/app/', '', $caminhoSujo);
 
-        // 4. Salva o caminho LIMPO ("musicas/...") no Banco de Dados
         $track->file_path = $caminhoLimpo;
         $track->save();
 
@@ -239,5 +244,40 @@ class AudioController extends Controller
         }
 
         return response()->json(['error' => 'Erro ao criar o ficheiro ZIP.'], 500);
+    }
+
+    public function importSoundcloud(Request $request)
+    {
+        $request->validate(['url' => 'required|url']);
+
+        $response = \Illuminate\Support\Facades\Http::post('http://python-extractor:5000/import-soundcloud', [
+            'url' => $request->url
+        ]);
+
+        if ($response->failed()) {
+            return response()->json(['error' => 'Erro ao raspar o SoundCloud no Python'], 500);
+        }
+
+        $data = $response->json();
+        
+        $playlist = \App\Models\Playlist::create([
+            'name' => $data['playlist_name'],
+            'description' => 'Importado do SoundCloud'
+        ]);
+
+        foreach ($data['tracks_urls'] as $trackData) {
+            $track = \App\Models\Track::firstOrCreate(
+                ['title' => $trackData['title'], 'artist' => $trackData['artist']],
+                [
+                    'cover_url' => $trackData['cover_url'] ?? null,
+                    'duration_seconds' => $trackData['duration_seconds'] ?? 0,
+                    // O SEGREDO: Guardamos o link do SoundCloud na coluna do YouTube
+                    'youtube_id' => $trackData['soundcloud_url'] ?? null 
+                ]
+            );
+            $playlist->tracks()->attach($track->id);
+        }
+
+        return response()->json(['message' => $data['message'], 'playlist' => $playlist]);
     }
 }

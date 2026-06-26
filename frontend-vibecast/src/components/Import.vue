@@ -1,24 +1,30 @@
 <script setup>
 import { ref } from 'vue'
 import { usePlayerStore } from '../stores/playerStore'
-import { X, Music, Youtube, FolderDot, ArrowLeft } from 'lucide-vue-next' // Ajuste os ícones conforme o que você tem
+import { X, Music, Youtube, FolderDot, ArrowLeft, Cloud } from 'lucide-vue-next'
 
 const playerStore = usePlayerStore()
 
-// null = Mostra as opções | 'spotify' = Mostra o input | 'youtube' | 'local'
+// null = Mostra as opções | 'spotify' ou 'soundcloud'
 const selectedSource = ref(null) 
 const playlistUrl = ref('')
 const isLoading = ref(false)
 
-const importPlaylist = async () => {
+const processImport = async () => {
   if (!playlistUrl.value) {
     playerStore.notify('Cole um link válido!', 'error')
     return
   }
 
   isLoading.value = true
+  
+  // Decide qual rota do Laravel chamar
+  const endpoint = selectedSource.value === 'soundcloud' 
+    ? 'http://localhost:8000/api/import-soundcloud'
+    : 'http://localhost:8000/api/import-playlist'
+
   try {
-    const response = await fetch('http://localhost:8000/api/import-playlist', {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: playlistUrl.value })
@@ -28,7 +34,7 @@ const importPlaylist = async () => {
     if (response.ok) {
       playerStore.notify(data.message, 'success')
       playerStore.loadLibrary() 
-      closeModal() // Fecha a janela após o sucesso
+      closeModal()
     } else {
       playerStore.notify(data.error || 'Erro na importação', 'error')
     }
@@ -42,7 +48,7 @@ const importPlaylist = async () => {
 
 const closeModal = () => {
   playerStore.closeImportModal()
-  setTimeout(() => { selectedSource.value = null }, 300) // Reseta a tela ao fechar
+  setTimeout(() => { selectedSource.value = null; playlistUrl.value = '' }, 300) 
 }
 </script>
 
@@ -69,12 +75,19 @@ const closeModal = () => {
       <div v-if="!selectedSource" class="p-8">
         <p class="text-neutral-400 mb-6 text-center">Escolha a origem das músicas que deseja trazer para o VibeCast.</p>
         
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button @click="selectedSource = 'spotify'" class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/30 hover:bg-green-500/10 hover:border-green-500/50 transition-all group">
             <div class="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Music class="w-8 h-8 text-green-500" />
             </div>
             <span class="font-bold text-white">Spotify</span>
+          </button>
+
+          <button @click="selectedSource = 'soundcloud'" class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/30 hover:bg-orange-500/10 hover:border-orange-500/50 transition-all group">
+            <div class="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Cloud class="w-8 h-8 text-orange-500" />
+            </div>
+            <span class="font-bold text-white">SoundCloud</span>
           </button>
 
           <button disabled class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/10 opacity-50 cursor-not-allowed">
@@ -95,25 +108,33 @@ const closeModal = () => {
         </div>
       </div>
 
-      <div v-else-if="selectedSource === 'spotify'" class="p-8">
+      <div v-else class="p-8">
         <div class="flex flex-col gap-6">
-          <div class="flex items-center gap-4 text-green-400 bg-green-500/10 p-4 rounded-lg border border-green-500/20">
+          
+          <div v-if="selectedSource === 'spotify'" class="flex items-center gap-4 text-green-400 bg-green-500/10 p-4 rounded-lg border border-green-500/20">
             <Music class="w-6 h-6" />
-            <p class="text-sm font-medium text-green-100">Cole o link público de qualquer Playlist do Spotify abaixo.</p>
+            <p class="text-sm font-medium text-green-100">Cole o link público de qualquer Playlist ou Música do Spotify.</p>
+          </div>
+
+          <div v-if="selectedSource === 'soundcloud'" class="flex items-center gap-4 text-orange-400 bg-orange-500/10 p-4 rounded-lg border border-orange-500/20">
+            <Cloud class="w-6 h-6" />
+            <p class="text-sm font-medium text-orange-100">Cole o link de uma Música ou Set do SoundCloud abaixo.</p>
           </div>
 
           <div class="flex gap-3">
             <input 
               v-model="playlistUrl" 
               type="text" 
-              placeholder="Ex: https://open.spotify.com/playlist/..." 
-              class="flex-1 bg-black/50 border border-neutral-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all"
-              @keyup.enter="importPlaylist"
+              :placeholder="selectedSource === 'spotify' ? 'Ex: https://open.spotify.com/...' : 'Ex: https://soundcloud.com/...'" 
+              class="flex-1 bg-black/50 border border-neutral-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-all"
+              :class="selectedSource === 'spotify' ? 'focus:border-green-500 focus:ring-1 focus:ring-green-500' : 'focus:border-orange-500 focus:ring-1 focus:ring-orange-500'"
+              @keyup.enter="processImport"
             >
             <button 
-              @click="importPlaylist" 
+              @click="processImport" 
               :disabled="isLoading"
-              class="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px]"
+              class="text-white px-8 py-3 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px]"
+              :class="selectedSource === 'spotify' ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'"
             >
               <span v-if="!isLoading">Importar</span>
               <span v-else class="flex items-center gap-2">
