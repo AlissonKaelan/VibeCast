@@ -61,63 +61,33 @@ class AudioController extends Controller
             ]);
         }
 
-        // A MÁGICA DA DECISÃO
-        // Se o youtube_id for um link (começa com http), é SoundCloud!
-        if (str_starts_with($track->youtube_id ?? '', 'http')) {
-            $response = \Illuminate\Support\Facades\Http::retry(3, 1000)
-                ->post('http://python-extractor:5000/download-direct', [
-                    'title' => $track->title,
-                    'artist' => $track->artist,
-                    'url' => $track->youtube_id
-                ]);
-        } else {
-            // Se não, pesquisa e baixa do YouTube Music
-            $response = \Illuminate\Support\Facades\Http::retry(3, 1000)
-                ->post('http://python-extractor:5000/download-track', [
-                    'title' => $track->title,
-                    'artist' => $track->artist
-                ]);
-        }
-
-        if ($response->failed()) {
-            $errorDetail = $response->json('detail') ?? 'Erro desconhecido no Python';
-            return response()->json(['error' => $errorDetail], 500);
-        }
-
-        $data = $response->json();
-
-        $caminhoSujo = $data['file_path'];
-        $caminhoLimpo = str_replace('/app/', '', $caminhoSujo);
-
-        $track->file_path = $caminhoLimpo;
-        $track->save();
+        // AQUI ESTÁ A MÁGICA DA FILA! 
+        // Em vez de baixar aqui, mandamos o ID para o nosso Trabalhador Invisível.
+        \App\Jobs\DownloadAudioJob::dispatch($track->id);
 
         return response()->json([
             'success' => true,
-            'message' => 'Download concluído e salvo no banco!',
-            'file_path' => $caminhoLimpo
-        ]);
+            'message' => 'Download adicionado à fila!',
+            'status' => 'processing'
+        ], 202); // 202 Accepted significa "Recebi o pedido, mas vou processar depois"
     }
 
     public function downloadPlaylistTracks($playlistId)
     {
-        // 1. Pega a playlist e todas as músicas dela
         $playlist = \App\Models\Playlist::with('tracks')->findOrFail($playlistId);
         $dispatchedCount = 0;
 
-        // 2. Passa por cada música
         foreach ($playlist->tracks as $track) {
-            // Se a música ainda não foi baixada, manda para a Fila (Background)
             if (!$track->file_path) {
-                \App\Jobs\DownloadTrackJob::dispatch($track);
+                // Despachamos o novo Job para cada música pendente
+                \App\Jobs\DownloadAudioJob::dispatch($track->id);
                 $dispatchedCount++;
             }
         }
 
-        // 3. Responde IMEDIATAMENTE ao Vue.js (Código 202 Accepted = Processando em segundo plano)
         return response()->json([
             'success' => true,
-            'message' => "Processamento iniciado. $dispatchedCount músicas foram adicionadas à fila de download."
+            'message' => "Processamento iniciado. {$dispatchedCount} músicas foram adicionadas à fila de download."
         ], 202);
     }
 
@@ -286,5 +256,26 @@ class AudioController extends Controller
         }
 
         return response()->json(['message' => $data['message'], 'playlist' => $playlist]);
+    }
+
+    /**
+     * Retorna o estado atualizado das músicas de uma playlist para o Vue.js espiar
+     */
+    public function getPlaylistStatus($id)
+    {
+        // Se o ID for 'all', buscamos o status de todas as músicas do sistema
+        if ($id === 'all') {
+            $tracks = \App\Models\Track::select('id', 'file_path', 'duration_seconds')->get();
+        } else {
+            $playlist = \App\Models\Playlist::with(['tracks' => function($query) {
+                $query->select('tracks.id', 'file_path', 'duration_seconds');
+            }])->findOrFail($id);
+            $tracks = $playlist->tracks;
+        }
+
+        return response()->json([
+            'success' => true,
+            'tracks' => $tracks
+        ]);
     }
 }

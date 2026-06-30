@@ -64,3 +64,7 @@ Route::post('/import-soundcloud', [App\Http\Controllers\AudioController::class, 
 Route::get('/radios', [RadioController::class, 'index']);
 Route::post('/radios', [RadioController::class, 'store']);
 Route::delete('/radios/{id}', [RadioController::class, 'destroy']);
+
+Route::get('/playlists/{id}/status', [App\Http\Controllers\AudioController::class, 'getPlaylistStatus']);
+
+Route::post('/playlists/{id}/download', [App\Http\Controllers\AudioController::class, 'downloadPlaylistTracks']);
