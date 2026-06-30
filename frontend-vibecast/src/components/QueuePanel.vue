@@ -37,8 +37,8 @@ const removeTrack = (index) => {
 <template>
   <div 
     v-if="playerStore.isQueueOpen" 
-    @click="playerStore.toggleQueue" 
-    class="fixed inset-0 bg-black/40 z-[120] lg:hidden transition-opacity backdrop-blur-sm"
+    @click.self="playerStore.isQueueOpen = false" 
+    class="fixed inset-0 z-[120] bg-black/40 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none transition-opacity"
   ></div>
 
   <div 
@@ -51,7 +51,7 @@ const removeTrack = (index) => {
         <h3 class="font-bold text-lg text-white">Fila de Reprodução</h3>
       </div>
       <button 
-        @click="playerStore.toggleQueue" 
+        @click="playerStore.isQueueOpen = false" 
         class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
       >
         <X class="w-5 h-5" />
@@ -142,4 +142,4 @@ const removeTrack = (index) => {
 <style scoped>
 .invisible-scrollbar::-webkit-scrollbar { display: none; }
 .invisible-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-</style> 
+</style>
