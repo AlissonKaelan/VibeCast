@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AudioController;
 use App\Http\Controllers\PlaylistController;
 use App\Http\Controllers\TrackController;
+use App\Http\Controllers\RadioController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -58,3 +59,8 @@ Route::post('/import-playlist', [\App\Http\Controllers\AudioController::class, '
 Route::get('/playlists/{id}/export', [\App\Http\Controllers\AudioController::class, 'exportPlaylist']);
 
 Route::post('/import-soundcloud', [App\Http\Controllers\AudioController::class, 'importSoundcloud']);
+
+// Rotas para as Web Rádios
+Route::get('/radios', [RadioController::class, 'index']);
+Route::post('/radios', [RadioController::class, 'store']);
+Route::delete('/radios/{id}', [RadioController::class, 'destroy']);
