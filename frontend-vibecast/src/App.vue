@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 
@@ -8,9 +9,13 @@ import Import from './components/Import.vue'
 import TrackList from './components/TrackList.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
+import Radios from './components/Radios.vue'
 
 import { usePlayerStore } from './stores/playerStore'
 const playerStore = usePlayerStore()
+
+// Estado para controlar a tela atual ('library' ou 'radios')
+const currentView = ref('library')
 </script>
 
 <template>
@@ -23,17 +28,18 @@ const playerStore = usePlayerStore()
     >
       <span class="font-bold text-sm tracking-wide">{{ playerStore.notification.text }}</span>
     </div>
-    <Import />
+
     <div class="flex-1 overflow-hidden pb-24">
       <Splitpanes class="h-full w-full">
         
         <Pane min-size="15" size="22" max-size="35" class="bg-black/20 backdrop-blur-md border-r border-neutral-800/80">
-          <Sidebar />
+          <Sidebar :currentView="currentView" @change-view="currentView = $event" />
         </Pane>
         
         <Pane class="bg-transparent">
           <div class="h-full w-full overflow-y-auto p-8 flex flex-col items-center invisible-scrollbar">
-            <TrackList />
+            <TrackList v-if="currentView === 'library'" />
+            <Radios v-else-if="currentView === 'radios'" />
           </div>
         </Pane>
 

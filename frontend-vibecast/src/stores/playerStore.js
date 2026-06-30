@@ -10,24 +10,26 @@ export const usePlayerStore = defineStore('player', () => {
   const duration = ref(0)
   const volume = ref(0.5)
   const isSeeking = ref(false)
+  
+  // NOVA VARIÁVEL: Controle se é Rádio Ao Vivo
+  const isRadio = ref(false) 
+  
   let audioPlayer = null 
 
   // Variável para controlar o Modal de Importação
   const isImportModalOpen = ref(false)
   const isQueueOpen = ref(false)
   const toggleQueue = () => isQueueOpen.value = !isQueueOpen.value
-  // Função para pular para uma música específica clicando na Fila
+  
   const jumpToQueueIndex = (index) => {
     if (index >= 0 && index < queue.value.length) {
       currentIndex.value = index
       playTrack(queue.value[index], [], true)
     }
   }
-  // Remove uma música específica da fila
   const removeFromQueue = (absoluteIndex) => {
     queue.value.splice(absoluteIndex, 1)
   }
-  // Troca a posição de duas músicas na fila (Drag & Drop)
   const reorderQueue = (oldAbsoluteIndex, newAbsoluteIndex) => {
     const item = queue.value.splice(oldAbsoluteIndex, 1)[0]
     queue.value.splice(newAbsoluteIndex, 0, item)
@@ -85,7 +87,6 @@ export const usePlayerStore = defineStore('player', () => {
     return `http://localhost:8000/api/stream?path=${filePath}`
   }
 
-  // Função utilitária para embaralhar array
   const shuffleArray = (array) => {
     const newArray = [...array]
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -95,8 +96,45 @@ export const usePlayerStore = defineStore('player', () => {
     return newArray
   }
 
+  // Tocar Rádio Ao Vivo (Agora com Cache-Busting Automático)
+  const playRadio = (radio) => {
+    isRadio.value = true;
+    
+    currentTrack.value = {
+      title: radio.name,
+      artist: 'Transmissão Ao Vivo (Web Rádio)',
+      cover_url: radio.logo_url || `https://ui-avatars.com/api/?name=${radio.name}&background=1db954&color=fff`,
+      youtube_id: 'stream_ao_vivo',
+      duration_seconds: 0
+    };
+
+    if (audioPlayer) audioPlayer.pause();
+    
+    // TRUQUE DE ENGENHARIA: CACHE-BUSTING
+    try {
+      // 1. Criamos um objeto de URL inteligente
+      let streamUrl = new URL(radio.stream_url);
+      
+      // 2. Injetamos um parâmetro 'cb' (Cache-Buster) com a hora exata do seu PC em milissegundos
+      streamUrl.searchParams.set('cb', Date.now());
+      
+      // 3. O link final ficará algo como: https://.../stream?cb=1718929384758
+      const finalLiveUrl = streamUrl.toString();
+
+      audioPlayer = new Audio(finalLiveUrl);
+    } catch (e) {
+      // Fallback: Se a URL que o usuário cadastrou for inválida, tenta usar como está
+      audioPlayer = new Audio(radio.stream_url);
+    }
+
+    audioPlayer.volume = volume.value;
+    audioPlayer.play();
+    isPlaying.value = true;
+  }
+
   const playTrack = (track, playlistTracks = [], forcePlay = false) => {
-    // Só pausa se NÃO for um comando forçado do sistema
+    isRadio.value = false; // DESLIGA O MODO RÁDIO AO TOCAR MÚSICA NORMAL
+
     if (currentTrack.value && currentTrack.value.id === track.id && !forcePlay) {
       if (isPlaying.value) {
         audioPlayer.pause()
@@ -131,7 +169,6 @@ export const usePlayerStore = defineStore('player', () => {
     audioPlayer = new Audio(getAudioUrl(track.file_path))
     audioPlayer.volume = volume.value
 
-
     audioPlayer.addEventListener('error', async () => {
       notify('Arquivo não encontrado no PC. Sincronizando...', 'error')
       isPlaying.value = false
@@ -153,30 +190,26 @@ export const usePlayerStore = defineStore('player', () => {
     audioPlayer.play()
     isPlaying.value = true
 
-    // O SEGREDO: Controle manual do Loop ao terminar a música!
     audioPlayer.onended = () => {
       if (loopMode.value === 2) {
-        // Se for "Repetir Música Atual", voltamos o tempo para o zero e damos play!
         audioPlayer.currentTime = 0
         audioPlayer.play()
       } else {
-        // Caso contrário, tenta ir para a próxima (que pode ter o Loop da Fila)
         nextTrack()
       }
     }
   }
 
-  // 2. nextTrack e prevTrack agora avisam que é "forcePlay = true"
   const nextTrack = () => {
-    if (queue.value.length === 0) return
+    if (isRadio.value || queue.value.length === 0) return
 
     let nextIndex = currentIndex.value + 1
 
     if (nextIndex >= queue.value.length) {
-      if (loopMode.value === 1) { // 1 = Repetir Fila (Playlist)
-        nextIndex = 0 // Volta para a primeira música da fila!
+      if (loopMode.value === 1) { 
+        nextIndex = 0 
       } else {
-        isPlaying.value = false // Sem repetição, apenas para de tocar.
+        isPlaying.value = false 
         return
       }
     }
@@ -185,7 +218,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const prevTrack = () => {
-    if (queue.value.length === 0) return
+    if (isRadio.value || queue.value.length === 0) return
 
     if (audioPlayer && audioPlayer.currentTime > 3) {
       audioPlayer.currentTime = 0
@@ -201,17 +234,13 @@ export const usePlayerStore = defineStore('player', () => {
         prevIdx = 0
       }
     }
-    // Passamos `true` no terceiro parâmetro!
     playTrack(queue.value[prevIdx], [], true)
   }
 
-  // 3. Atualizando o Toggle Loop para refletir no áudio na mesma hora
   const toggleLoop = () => {
-    // Alterna os Modos: 0 (Desligado) -> 1 (Playlist) -> 2 (Atual) -> 0...
     loopMode.value = (loopMode.value + 1) % 3
   }
 
-  // CONTROLES DE REPRODUÇÃO
   const toggleShuffle = () => {
     isShuffle.value = !isShuffle.value
     
@@ -237,18 +266,20 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const setSeek = (newTime) => {
+    if (isRadio.value) return; // Não faz Seek em rádio ao vivo
     const timeAsNumber = Number(newTime)
     currentTime.value = timeAsNumber
     if (audioPlayer) {
       audioPlayer.currentTime = timeAsNumber
     }
   }
+
   return {
     isImportModalOpen, openImportModal, closeImportModal,
-    tracks, currentTrack, isPlaying, currentTime, duration, volume, isSeeking,
+    tracks, currentTrack, isPlaying, currentTime, duration, volume, isSeeking, isRadio,
     queue, originalQueue, currentIndex, isShuffle, loopMode,
     savedPlaylists, currentPlaylistId, loadLibrary, loadAllTracks,
     notification, notify, isQueueOpen, toggleQueue, jumpToQueueIndex, removeFromQueue, reorderQueue,
-    playTrack, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek
+    playTrack, playRadio, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek
   }
 })

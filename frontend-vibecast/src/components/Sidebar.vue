@@ -1,7 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, Home } from 'lucide-vue-next'
+import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, Home, Radio } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
+
+// Recebe do App.vue a tela atual e avisa quando quiser mudar
+defineProps(['currentView'])
+const emit = defineEmits(['change-view'])
 
 const playerStore = usePlayerStore()
 
@@ -17,9 +21,9 @@ const isProcessing = ref(false)
 const showDeleteModal = ref(false)
 const playlistToDelete = ref(null)
 
-// 1. Função para abrir uma Playlist e gravar o ID
 const selectPlaylist = async (playlistId) => {
-  playerStore.currentPlaylistId = playlistId; // <-- ATIVA O BOTÃO DO ZIP
+  emit('change-view', 'library'); // Volta para a Biblioteca
+  playerStore.currentPlaylistId = playlistId;
   
   try {
     const response = await fetch(`http://localhost:8000/api/playlists/${playlistId}`);
@@ -30,9 +34,9 @@ const selectPlaylist = async (playlistId) => {
   }
 }
 
-// 2. Função para o botão "Todas as Músicas" (Limpa o ID)
 const loadAll = () => {
-  playerStore.currentPlaylistId = null; // <-- DESATIVA O BOTÃO DO ZIP
+  emit('change-view', 'library'); // Volta para a Biblioteca
+  playerStore.currentPlaylistId = null;
   playerStore.loadAllTracks();
 }
 
@@ -61,7 +65,6 @@ const closeModal = () => {
 
 const handleSave = async () => {
   if (!playlistName.value.trim()) return
-
   isProcessing.value = true
   
   const url = modalMode.value === 'create' 
@@ -94,14 +97,12 @@ const handleSave = async () => {
   }
 }
 
-// Prepara a exclusão e abre o Modal
 const confirmDeletePrompt = (pl, event) => {
   event.stopPropagation()
   playlistToDelete.value = pl
   showDeleteModal.value = true
 }
 
-// Executa a exclusão de fato
 const executeDelete = async () => {
   if (!playlistToDelete.value) return
   isProcessing.value = true
@@ -155,23 +156,34 @@ onMounted(() => {
     <div 
       @click="loadAll"
       class="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all mb-2 mt-2"
-      :class="playerStore.currentPlaylistId === null ? 'bg-blue-600/20 border border-blue-500/50' : 'hover:bg-neutral-900/50'"
+      :class="(playerStore.currentPlaylistId === null && currentView === 'library') ? 'bg-blue-600/20 border border-blue-500/50' : 'hover:bg-neutral-900/50 text-zinc-400 hover:text-white'"
     >
       <div class="w-10 h-10 rounded-md flex items-center justify-center shadow flex-shrink-0"
-           :class="playerStore.currentPlaylistId === null ? 'bg-blue-500/20 text-blue-400' : 'bg-neutral-800/80 text-neutral-400'">
+           :class="(playerStore.currentPlaylistId === null && currentView === 'library') ? 'bg-blue-500/20 text-blue-400' : 'bg-neutral-800/80 text-neutral-400'">
         <Home class="w-5 h-5" />
       </div>
-      <div class="flex-1 font-bold text-sm" :class="playerStore.currentPlaylistId === null ? 'text-blue-400' : 'text-white'">
+      <div class="flex-1 font-bold text-sm" :class="(playerStore.currentPlaylistId === null && currentView === 'library') ? 'text-blue-400' : 'text-white'">
         Todas as Músicas
       </div>
     </div>
 
     <button 
       @click="playerStore.openImportModal()" 
-      class="w-full flex items-center gap-3 p-3 mt-4 mb-2 rounded-lg cursor-pointer transition-all bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 text-blue-100 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
+      class="w-full flex items-center gap-3 p-3 mt-1 mb-2 rounded-lg cursor-pointer transition-all bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 text-blue-100 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
       <span class="font-bold">Nova Importação</span>
+    </button>
+    
+    <button 
+      @click="$emit('change-view', 'radios')" 
+      :class="['w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer', currentView === 'radios' ? 'bg-blue-600/20 border border-blue-500/50 text-blue-400' : 'text-zinc-400 hover:text-white hover:bg-neutral-900/50']"
+    >
+      <div class="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+           :class="currentView === 'radios' ? 'bg-blue-500/20 text-blue-400' : 'bg-neutral-800/80 text-neutral-400'">
+          <Radio class="w-5 h-5" />
+      </div>
+      <span class="font-bold text-sm" :class="currentView === 'radios' ? 'text-blue-400' : 'text-white'">Web Rádios</span>
     </button>
 
     <div class="h-px w-full bg-neutral-800/50 my-1"></div>
@@ -186,7 +198,7 @@ onMounted(() => {
         :key="pl.id"
         @click="selectPlaylist(pl.id)"
         class="flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all group"
-        :class="playerStore.currentPlaylistId === pl.id ? 'bg-neutral-800/60 border border-neutral-700/50' : 'hover:bg-neutral-900/50'"
+        :class="(playerStore.currentPlaylistId === pl.id && currentView === 'library') ? 'bg-neutral-800/60 border border-neutral-700/50' : 'hover:bg-neutral-900/50'"
       >
         <div class="flex items-center gap-3 flex-1 overflow-hidden">
           <div class="w-12 h-12 bg-neutral-800/80 rounded-md flex items-center justify-center shadow flex-shrink-0 transition-colors group-hover:bg-neutral-700">
@@ -194,7 +206,7 @@ onMounted(() => {
           </div>
           
           <div class="flex-1 overflow-hidden">
-            <h4 class="font-bold text-xs truncate text-white" :class="playerStore.currentPlaylistId === pl.id ? 'text-blue-500' : ''">
+            <h4 class="font-bold text-xs truncate text-white" :class="(playerStore.currentPlaylistId === pl.id && currentView === 'library') ? 'text-blue-500' : ''">
               {{ pl.name }}
             </h4>
             <p v-if="pl.description" class="text-[10px] text-neutral-500 truncate italic mt-0.5">
@@ -225,50 +237,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="showModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity">
-      <div class="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-transform scale-100 animate-slide-up">
-        <div class="flex justify-between items-center mb-5">
-          <h3 class="text-lg font-bold text-white">{{ modalMode === 'create' ? 'Nova Playlist' : 'Editar Detalhes' }}</h3>
-          <button @click="closeModal" class="text-neutral-400 hover:text-white transition-colors"><X class="w-5 h-5" /></button>
-        </div>
-        <input v-model="playlistName" @keyup.enter="handleSave" type="text" placeholder="Nome da playlist..." class="w-full bg-neutral-950 border border-neutral-700 text-white rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-neutral-600 font-sans text-sm" autofocus />
-        <textarea v-model="playlistDescription" placeholder="Descrição opcional..." rows="3" class="w-full bg-neutral-950 border border-neutral-700 text-white rounded-lg px-4 py-3 mb-6 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-neutral-600 font-sans text-xs resize-none"></textarea>
-        <div class="flex justify-end gap-3">
-          <button @click="closeModal" class="px-4 py-2 rounded-lg font-semibold text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">Cancelar</button>
-          <button @click="handleSave" :disabled="isProcessing || !playlistName.trim()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center min-w-[100px]">
-            <Loader2 v-if="isProcessing" class="w-4 h-4 animate-spin" /><span v-else>{{ modalMode === 'create' ? 'Criar' : 'Salvar' }}</span>
-          </button>
-        </div>
-      </div>
     </div>
-
-    <div v-if="showDeleteModal" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity">
-      <div class="bg-neutral-900 border border-red-900/50 rounded-3xl p-6 w-full max-w-sm shadow-2xl transform transition-transform scale-100 animate-slide-up">
-        
-        <div class="flex flex-col items-center text-center mb-6 mt-2">
-          <div class="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
-            <AlertTriangle class="w-7 h-7 text-red-500" />
-          </div>
-          <h3 class="text-xl font-bold text-white mb-2">Excluir Playlist?</h3>
-          <p class="text-sm text-neutral-400">
-            Tem certeza que deseja excluir <strong class="text-white">"{{ playlistToDelete?.name }}"</strong>?<br>Esta ação não pode ser desfeita.
-          </p>
-        </div>
-
-        <div class="flex justify-between gap-3 w-full">
-          <button @click="showDeleteModal = false" class="flex-1 py-3 rounded-xl font-semibold text-sm text-neutral-400 hover:text-white bg-neutral-800/50 hover:bg-neutral-800 transition-colors">
-            Cancelar
-          </button>
-          <button @click="executeDelete" :disabled="isProcessing" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.4)]">
-            <Loader2 v-if="isProcessing" class="w-5 h-5 animate-spin" />
-            <span v-else>Sim, Excluir</span>
-          </button>
-        </div>
-
-      </div>
-    </div>
-    
-  </div>
 </template>
 
 <style scoped>
