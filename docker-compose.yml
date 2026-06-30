@@ -16,6 +16,22 @@ services:
     networks:
       - spotube-net
 
+  # Trabalhador das Filas (Downloads em Background)
+  queue-worker:
+    build:
+      context: ./backend-laravel
+      dockerfile: Dockerfile
+    container_name: vibecast-queue-worker
+    restart: unless-stopped
+    # Roda o trabalhador e avisa que ele tem até 5 minutos (300s) para baixar algo
+    command: php artisan queue:work --timeout=300 --tries=3
+    volumes:
+      - ./backend-laravel:/var/www
+    depends_on:
+      - db
+    networks:
+      - spotube-net
+
   # Microsserviço de Extração - Python
   python-extractor:
     build:
