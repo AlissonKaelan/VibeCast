@@ -233,11 +233,50 @@ onMounted(() => {
             <Trash2 class="w-3.5 h-3.5" />
           </button>
         </div>
-
       </div>
     </div>
 
+    <div v-if="showModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity">
+      <div class="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-transform scale-100 animate-slide-up">
+        <div class="flex justify-between items-center mb-5">
+          <h3 class="text-lg font-bold text-white">{{ modalMode === 'create' ? 'Nova Playlist' : 'Editar Detalhes' }}</h3>
+          <button @click="closeModal" class="text-neutral-400 hover:text-white transition-colors"><X class="w-5 h-5" /></button>
+        </div>
+        <input v-model="playlistName" @keyup.enter="handleSave" type="text" placeholder="Nome da playlist..." class="w-full bg-neutral-950 border border-neutral-700 text-white rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-neutral-600 font-sans text-sm" autofocus />
+        <textarea v-model="playlistDescription" placeholder="Descrição opcional..." rows="3" class="w-full bg-neutral-950 border border-neutral-700 text-white rounded-lg px-4 py-3 mb-6 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-neutral-600 font-sans text-xs resize-none"></textarea>
+        <div class="flex justify-end gap-3">
+          <button @click="closeModal" class="px-4 py-2 rounded-lg font-semibold text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">Cancelar</button>
+          <button @click="handleSave" :disabled="isProcessing || !playlistName.trim()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center min-w-[100px]">
+            <Loader2 v-if="isProcessing" class="w-4 h-4 animate-spin" /><span v-else>{{ modalMode === 'create' ? 'Criar' : 'Salvar' }}</span>
+          </button>
+        </div>
+      </div>
     </div>
+
+    <div v-if="showDeleteModal" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity">
+      <div class="bg-neutral-900 border border-red-900/50 rounded-3xl p-6 w-full max-w-sm shadow-2xl transform transition-transform scale-100 animate-slide-up">
+        <div class="flex flex-col items-center text-center mb-6 mt-2">
+          <div class="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
+            <AlertTriangle class="w-7 h-7 text-red-500" />
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Excluir Playlist?</h3>
+          <p class="text-sm text-neutral-400">
+            Tem certeza que deseja excluir <strong class="text-white">"{{ playlistToDelete?.name }}"</strong>?<br>Esta ação não pode ser desfeita.
+          </p>
+        </div>
+        <div class="flex justify-between gap-3 w-full">
+          <button @click="showDeleteModal = false" class="flex-1 py-3 rounded-xl font-semibold text-sm text-neutral-400 hover:text-white bg-neutral-800/50 hover:bg-neutral-800 transition-colors">
+            Cancelar
+          </button>
+          <button @click="executeDelete" :disabled="isProcessing" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.4)]">
+            <Loader2 v-if="isProcessing" class="w-5 h-5 animate-spin" />
+            <span v-else>Sim, Excluir</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    
+  </div>
 </template>
 
 <style scoped>
