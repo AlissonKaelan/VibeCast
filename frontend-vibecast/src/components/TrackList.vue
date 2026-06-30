@@ -5,7 +5,6 @@ import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
 
-// Assim que a tela carregar, ele vai buscar as músicas no banco!
 onMounted(() => {
   playerStore.loadAllTracks()
 })
@@ -14,17 +13,20 @@ const showMoveModal = ref(false)
 const trackToMove = ref(null)
 const isMoving = ref(false)
 
-// Variáveis de Download
+// Variáveis de Download (Agora conectadas ao Radar do Pinia!)
 const downloadingTracks = ref({})
-const isDownloadingAll = ref(false)
-const batchTotal = ref(0)
-const batchCompleted = ref(0)
+const isBatchActive = ref(false) 
+
+// O progresso agora é reativo! Ele olha para o banco de dados em tempo real.
+const batchTotal = computed(() => playerStore.tracks.length)
+const batchCompleted = computed(() => playerStore.tracks.filter(t => t.file_path).length)
+// Verifica se ainda existem músicas pendentes na playlist atual
+const isDownloadingAll = computed(() => isBatchActive.value && batchCompleted.value < batchTotal.value)
 
 // LÓGICA DE BUSCA
 const searchQuery = ref('')
 
 const filteredTracks = computed(() => {
-  // Se não tem nada digitado, devolve todas as músicas originais
   if (!searchQuery.value.trim()) return playerStore.tracks
 
   const query = searchQuery.value.toLowerCase()
@@ -35,8 +37,8 @@ const filteredTracks = computed(() => {
   })
 })
 
-// FUNÇÕES DE DOWNLOAD
-const downloadAudio = async (trackId, isBatch = false) => {
+// FUNÇÕES DE DOWNLOAD (Refatoradas para Background Jobs)
+const downloadAudio = async (trackId) => {
   downloadingTracks.value[trackId] = true 
   try {
     const response = await fetch(`http://localhost:8000/api/tracks/${trackId}/download`, { 
@@ -44,21 +46,26 @@ const downloadAudio = async (trackId, isBatch = false) => {
       headers: { 'Accept': 'application/json' }
     })
     
-    if (!response.ok) throw new Error('Falha')
-    
-    const data = await response.json()
-    const track = playerStore.tracks.find(t => t.id === trackId)
-    if (track) track.file_path = data.file_path
-
-    if (!isBatch) playerStore.notify('Download concluído!', 'success')
+    if (response.ok) {
+      playerStore.notify('Download adicionado à fila!', 'success')
+      // LIGA O RADAR ASSIM QUE O USUÁRIO CLICAR!
+      playerStore.startPlaylistStatusPolling(playerStore.currentPlaylistId)
+    } else {
+      throw new Error('Falha')
+    }
   } catch (error) {
-    if (!isBatch) playerStore.notify('Erro ao baixar música', 'error')
+    playerStore.notify('Erro ao enviar para fila', 'error')
   } finally {
     downloadingTracks.value[trackId] = false 
   }
 }
 
 const downloadAll = async () => {
+  if (!playerStore.currentPlaylistId) {
+    playerStore.notify('Selecione uma playlist no menu primeiro!', 'error');
+    return;
+  }
+
   const tracksToDownload = playerStore.tracks.filter(t => !t.file_path)
   
   if (tracksToDownload.length === 0) {
@@ -66,32 +73,26 @@ const downloadAll = async () => {
     return
   }
 
-  batchTotal.value = tracksToDownload.length
-  batchCompleted.value = 0
-  isDownloadingAll.value = true
+  // Ativa o widget visual de progresso inferior
+  isBatchActive.value = true
 
-  const concurrency = 3; 
-  let index = 0;
+  try {
+    const response = await fetch(`http://localhost:8000/api/playlists/${playerStore.currentPlaylistId}/download`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' }
+    });
 
-  const downloadWorker = async () => {
-    while (index < tracksToDownload.length) {
-      const currentIndex = index++;
-      const track = tracksToDownload[currentIndex];
+    if (response.ok) {
+      playerStore.notify('Downloads em lote adicionados à fila!', 'success');
       
-      await downloadAudio(track.id, true);
-      batchCompleted.value++; 
+      // LIGA O RADAR ASSIM QUE O USUÁRIO CLICAR!
+      playerStore.startPlaylistStatusPolling(playerStore.currentPlaylistId);
     }
+  } catch (error) {
+    console.error("Erro ao enviar para fila:", error);
+    playerStore.notify('Erro ao processar lote', 'error');
+    isBatchActive.value = false;
   }
-
-  const workers = [];
-  for (let i = 0; i < concurrency; i++) {
-    workers.push(downloadWorker());
-  }
-
-  await Promise.all(workers);
-
-  isDownloadingAll.value = false;
-  playerStore.notify(`Sucesso! ${batchTotal.value} músicas baixadas.`, 'success');
 }
 
 // FUNÇÕES DE PLAYLIST E EXPORTAÇÃO
@@ -183,7 +184,7 @@ const exportToPendrive = () => {
           >
             <Loader2 v-if="isDownloadingAll" class="w-4 h-4 animate-spin" />
             <Download v-else class="w-4 h-4" />
-            {{ isDownloadingAll ? 'A Transferir...' : 'Transferir Todas' }}
+            {{ isDownloadingAll ? 'Na Fila de Download...' : 'Transferir Todas' }}
           </button>
         </div>
       </div>
@@ -225,10 +226,10 @@ const exportToPendrive = () => {
           <button 
             v-if="!track.file_path"
             @click="downloadAudio(track.id)"
-            :disabled="downloadingTracks[track.id]"
+            :disabled="downloadingTracks[track.id] || isDownloadingAll"
             class="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-all disabled:opacity-50"
           >
-            <Loader2 v-if="downloadingTracks[track.id]" class="w-4 h-4 animate-spin" />
+            <Loader2 v-if="downloadingTracks[track.id] || isDownloadingAll" class="w-4 h-4 animate-spin text-blue-400" />
             <Download v-else class="w-4 h-4" />
           </button>
 
@@ -301,11 +302,11 @@ const exportToPendrive = () => {
     
     <div v-if="isDownloadingAll" class="fixed bottom-28 right-6 z-[100] bg-neutral-900 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex items-center gap-4 w-72 animate-slide-up">
       <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0 border border-blue-500/30">
-        <Download class="w-5 h-5 text-blue-400 animate-pulse" />
+        <Loader2 class="w-5 h-5 text-blue-400 animate-spin" />
       </div>
       <div class="flex-1">
         <div class="flex justify-between items-center mb-1">
-          <span class="text-sm font-bold text-white">Baixando Lote</span>
+          <span class="text-sm font-bold text-white">Na fila do Servidor</span>
           <span class="text-xs text-blue-400 font-bold">{{ batchCompleted }} / {{ batchTotal }}</span>
         </div>
         <div class="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">

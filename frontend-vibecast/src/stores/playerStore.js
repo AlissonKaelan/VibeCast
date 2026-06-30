@@ -10,6 +10,7 @@ export const usePlayerStore = defineStore('player', () => {
   const duration = ref(0)
   const volume = ref(0.5)
   const isSeeking = ref(false)
+  let playlistStatusInterval = null
   
   // NOVA VARIÁVEL: Controle se é Rádio Ao Vivo
   const isRadio = ref(false) 
@@ -75,6 +76,7 @@ export const usePlayerStore = defineStore('player', () => {
       const data = await response.json()
       tracks.value = data.tracks
       currentPlaylistId.value = null 
+      startPlaylistStatusPolling('all')
     } catch (error) {
       console.error("Erro ao carregar todas as músicas:", error)
     }
@@ -274,12 +276,58 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  // FUNÇÃO MÁGICA: Fica checando o banco em background para atualizar as faixas na tela
+  const startPlaylistStatusPolling = (playlistId) => {
+    // Se já tiver um radar ligado, desliga para não duplicar
+    if (playlistStatusInterval) clearInterval(playlistStatusInterval)
+
+    const targetId = playlistId || 'all'
+
+    playlistStatusInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/api/playlists/${targetId}/status`)
+        const data = await response.json()
+
+        if (data.success) {
+          let hasPendingDownloads = false
+
+          // Varre as músicas que vieram do banco e atualiza na tela do usuário imediatamente
+          data.tracks.forEach(updatedTrack => {
+            const currentTrackInStore = tracks.value.find(t => t.id === updatedTrack.id)
+            if (currentTrackInStore) {
+              // Se o arquivo físico acabou de aparecer no banco, injeta na tela ao vivo!
+              if (!currentTrackInStore.file_path && updatedTrack.file_path) {
+                currentTrackInStore.file_path = updatedTrack.file_path
+                currentTrackInStore.duration_seconds = updatedTrack.duration_seconds
+              }
+            }
+
+            // Se ainda existir alguma música sem caminho de arquivo, o download continua ativo
+            if (!updatedTrack.file_path) {
+              hasPendingDownloads = true
+            }
+          })
+
+          // SE CONCLUIU TUDO: Desliga o radar automaticamente para poupar bateria/processador
+          if (!hasPendingDownloads) {
+            clearInterval(playlistStatusInterval)
+            playlistStatusInterval = null
+            notify('Todos os downloads em lote foram concluídos!')
+          }
+        }
+      } catch (error) {
+        console.error("Erro no radar de downloads:", error)
+      }
+    }, 4000) // Verifica a cada 4 segundos
+  }
+
   return {
     isImportModalOpen, openImportModal, closeImportModal,
     tracks, currentTrack, isPlaying, currentTime, duration, volume, isSeeking, isRadio,
     queue, originalQueue, currentIndex, isShuffle, loopMode,
     savedPlaylists, currentPlaylistId, loadLibrary, loadAllTracks,
     notification, notify, isQueueOpen, toggleQueue, jumpToQueueIndex, removeFromQueue, reorderQueue,
-    playTrack, playRadio, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek
+    playTrack, playRadio, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek,
+    startPlaylistStatusPolling
   }
 })

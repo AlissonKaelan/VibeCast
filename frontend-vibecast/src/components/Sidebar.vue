@@ -29,6 +29,7 @@ const selectPlaylist = async (playlistId) => {
     const response = await fetch(`http://localhost:8000/api/playlists/${playlistId}`);
     const data = await response.json();
     playerStore.tracks = data.tracks; 
+    playerStore.startPlaylistStatusPolling(playlistId);
   } catch (error) {
     console.error("Erro ao carregar músicas:", error);
   }
