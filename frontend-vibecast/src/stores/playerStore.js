@@ -8,11 +8,12 @@ export const usePlayerStore = defineStore('player', () => {
   const isPlaying = ref(false)
   const currentTime = ref(0)
   const duration = ref(0)
-  const volume = ref(0.5)
+  // Ler o volume do localStorage, se não existir, usar 0.5 como padrão
+  const volume = ref(parseFloat(localStorage.getItem('vibecast_volume')) ?? 0.5)
   const isSeeking = ref(false)
   let playlistStatusInterval = null
   
-  // NOVA VARIÁVEL: Controle se é Rádio Ao Vivo
+  // Controle se é Rádio Ao Vivo
   const isRadio = ref(false) 
   
   let audioPlayer = null 
@@ -41,9 +42,10 @@ export const usePlayerStore = defineStore('player', () => {
   // Estados da Fila e Modos de Play
   const queue = ref([])             
   const originalQueue = ref([])    
-  const currentIndex = ref(-1)      
-  const isShuffle = ref(false)      
-  const loopMode = ref(0)        
+  const currentIndex = ref(-1) 
+  // Ler o estado de shuffle do localStorage, se não existir, usar false como padrão     
+  const isShuffle = ref(localStorage.getItem('vibecast_shuffle') === 'true')    
+  const loopMode = ref(parseInt(localStorage.getItem('vibecast_loop')) || 0)       
 
   // 2. Variáveis da Biblioteca
   const savedPlaylists = ref([])
@@ -241,10 +243,14 @@ export const usePlayerStore = defineStore('player', () => {
 
   const toggleLoop = () => {
     loopMode.value = (loopMode.value + 1) % 3
+    // Salva no disco do navegador!
+    localStorage.setItem('vibecast_loop', loopMode.value)
   }
 
   const toggleShuffle = () => {
     isShuffle.value = !isShuffle.value
+    // Salva no disco do navegador!
+    localStorage.setItem('vibecast_shuffle', isShuffle.value)
     
     if (isShuffle.value) {
       const current = queue.value[currentIndex.value]
@@ -260,11 +266,20 @@ export const usePlayerStore = defineStore('player', () => {
   const setVolume = (newVol) => {
     volume.value = newVol
     if (audioPlayer) audioPlayer.volume = newVol
+    // Salva no disco do navegador!
+    localStorage.setItem('vibecast_volume', newVol)
   }
 
   const toggleMute = () => {
-    volume.value = volume.value > 0 ? 0 : 1
-    if (audioPlayer) audioPlayer.volume = volume.value
+    if (volume.value > 0) {
+      // Salva o volume antigo antes de mutar, para poder restaurar depois
+      localStorage.setItem('vibecast_volume_before_mute', volume.value)
+      setVolume(0)
+    } else {
+      // Restaura o volume antigo (ou 0.5 se não existir)
+      const oldVol = parseFloat(localStorage.getItem('vibecast_volume_before_mute')) || 0.5
+      setVolume(oldVol)
+    }
   }
 
   const setSeek = (newTime) => {
@@ -276,7 +291,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  // FUNÇÃO MÁGICA: Fica checando o banco em background para atualizar as faixas na tela
+  // Fica checando o banco em background para atualizar as faixas na tela
   const startPlaylistStatusPolling = (playlistId) => {
     // Se já tiver um radar ligado, desliga para não duplicar
     if (playlistStatusInterval) clearInterval(playlistStatusInterval)
