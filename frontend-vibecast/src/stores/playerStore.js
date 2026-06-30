@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 export const usePlayerStore = defineStore('player', () => {
   // 1. Variáveis do Player
   const tracks = ref([])
+  const isLoadingTracks = ref(true)
   const currentTrack = ref(null)
   const isPlaying = ref(false)
   const currentTime = ref(0)
@@ -29,13 +30,16 @@ export const usePlayerStore = defineStore('player', () => {
       playTrack(queue.value[index], [], true)
     }
   }
+
   const removeFromQueue = (absoluteIndex) => {
     queue.value.splice(absoluteIndex, 1)
   }
+
   const reorderQueue = (oldAbsoluteIndex, newAbsoluteIndex) => {
     const item = queue.value.splice(oldAbsoluteIndex, 1)[0]
     queue.value.splice(newAbsoluteIndex, 0, item)
   }
+  
   const openImportModal = () => isImportModalOpen.value = true
   const closeImportModal = () => isImportModalOpen.value = false
 
@@ -73,14 +77,17 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const loadAllTracks = async () => {
+    isLoadingTracks.value = true // LIGA O LOADING
     try {
       const response = await fetch('http://localhost:8000/api/tracks')
       const data = await response.json()
       tracks.value = data.tracks
       currentPlaylistId.value = null 
-      startPlaylistStatusPolling('all')
+      startPlaylistStatusPolling('all') 
     } catch (error) {
       console.error("Erro ao carregar todas as músicas:", error)
+    } finally {
+      isLoadingTracks.value = false // DESLIGA O LOADING SEJA SUCESSO OU ERRO
     }
   }
 
@@ -109,7 +116,8 @@ export const usePlayerStore = defineStore('player', () => {
       artist: 'Transmissão Ao Vivo (Web Rádio)',
       cover_url: radio.logo_url || `https://ui-avatars.com/api/?name=${radio.name}&background=1db954&color=fff`,
       youtube_id: 'stream_ao_vivo',
-      duration_seconds: 0
+      duration_seconds: 0,
+      stream_url: radio.stream_url
     };
 
     if (audioPlayer) audioPlayer.pause();
@@ -134,6 +142,29 @@ export const usePlayerStore = defineStore('player', () => {
     audioPlayer.volume = volume.value;
     audioPlayer.play();
     isPlaying.value = true;
+  }
+
+  // Função dedicada para o botão de Play/Pause central
+  const togglePlayPause = () => {
+    if (!audioPlayer || !currentTrack.value) return;
+
+    if (isPlaying.value) {
+      audioPlayer.pause();
+      isPlaying.value = false;
+    } else {
+      // Se for Rádio, não damos apenas "play", nós RECONECTAMOS para ficar Ao Vivo!
+      if (isRadio.value) {
+        playRadio({
+          name: currentTrack.value.title,
+          logo_url: currentTrack.value.cover_url,
+          stream_url: currentTrack.value.stream_url
+        });
+      } else {
+        // Se for música normal, apenas retoma de onde parou
+        audioPlayer.play();
+        isPlaying.value = true;
+      }
+    }
   }
 
   const playTrack = (track, playlistTracks = [], forcePlay = false) => {
@@ -343,6 +374,6 @@ export const usePlayerStore = defineStore('player', () => {
     savedPlaylists, currentPlaylistId, loadLibrary, loadAllTracks,
     notification, notify, isQueueOpen, toggleQueue, jumpToQueueIndex, removeFromQueue, reorderQueue,
     playTrack, playRadio, nextTrack, prevTrack, toggleShuffle, toggleLoop, setVolume, toggleMute, setSeek,
-    startPlaylistStatusPolling
+    startPlaylistStatusPolling, togglePlayPause, isLoadingTracks
   }
 })

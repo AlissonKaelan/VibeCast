@@ -22,8 +22,11 @@ const showDeleteModal = ref(false)
 const playlistToDelete = ref(null)
 
 const selectPlaylist = async (playlistId) => {
-  emit('change-view', 'library'); // Volta para a Biblioteca
+  emit('change-view', 'library');
   playerStore.currentPlaylistId = playlistId;
+  
+  //LIGA O SKELETON
+  playerStore.isLoadingTracks = true; 
   
   try {
     const response = await fetch(`http://localhost:8000/api/playlists/${playlistId}`);
@@ -32,6 +35,9 @@ const selectPlaylist = async (playlistId) => {
     playerStore.startPlaylistStatusPolling(playlistId);
   } catch (error) {
     console.error("Erro ao carregar músicas:", error);
+  } finally {
+    // 👉 DESLIGA O SKELETON!
+    playerStore.isLoadingTracks = false; 
   }
 }
 

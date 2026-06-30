@@ -190,7 +190,21 @@ const exportToPendrive = () => {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div v-if="playerStore.isLoadingTracks" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div v-for="i in 9" :key="i" class="bg-neutral-900/50 p-4 rounded-xl flex items-center gap-4 border border-neutral-800/50 animate-pulse">
+        <div class="w-14 h-14 rounded-md bg-neutral-800 flex-shrink-0"></div>
+        <div class="flex-1 space-y-3 py-1">
+          <div class="h-3.5 bg-neutral-800 rounded-full w-3/4"></div>
+          <div class="h-2.5 bg-neutral-800 rounded-full w-1/2"></div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <div class="w-9 h-9 rounded-full bg-neutral-800"></div>
+          <div class="w-9 h-9 rounded-full bg-neutral-800"></div>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div v-for="(track, index) in filteredTracks" :key="track.id"
         class="bg-neutral-900/50 p-4 rounded-xl flex items-center gap-4 hover:bg-neutral-800 transition-colors border border-neutral-800/50 group"
         :class="playerStore.currentTrack?.id === track.id ? 'border-blue-500/60 bg-blue-900/10' : ''"
@@ -245,7 +259,7 @@ const exportToPendrive = () => {
       </div>
     </div>
 
-    <div v-if="playerStore.tracks.length === 0" class="flex flex-col items-center justify-center py-20 text-center w-full">
+    <div v-if="!playerStore.isLoadingTracks && playerStore.tracks.length === 0" class="flex flex-col items-center justify-center py-20 text-center w-full">
       <div class="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-4 shadow-inner">
         <Music class="w-10 h-10 text-neutral-600" />
       </div>
@@ -255,7 +269,7 @@ const exportToPendrive = () => {
       </p>
     </div>
 
-    <div v-else-if="filteredTracks.length === 0" class="flex flex-col items-center justify-center py-20 text-center w-full">
+    <div v-else-if="!playerStore.isLoadingTracks && filteredTracks.length === 0" class="flex flex-col items-center justify-center py-20 text-center w-full">
       <div class="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-4 shadow-inner">
         <Search class="w-10 h-10 text-neutral-600" />
       </div>
