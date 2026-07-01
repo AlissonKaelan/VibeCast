@@ -358,7 +358,6 @@ export const usePlayerStore = defineStore('player', () => {
           if (!hasPendingDownloads) {
             clearInterval(playlistStatusInterval)
             playlistStatusInterval = null
-            notify('Todos os downloads em lote foram concluídos!')
           }
         }
       } catch (error) {

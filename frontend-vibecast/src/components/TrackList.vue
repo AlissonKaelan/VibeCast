@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { Download, Loader2, Music, Play, Pause, FolderPlus, X, DownloadCloud, Search } from 'lucide-vue-next'
+import { Download, Loader2, Music, Play, Pause, FolderPlus, X, DownloadCloud, Search, Pencil, Trash2 } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 
 const playerStore = usePlayerStore()
@@ -13,17 +13,24 @@ const showMoveModal = ref(false)
 const trackToMove = ref(null)
 const isMoving = ref(false)
 
-// Variáveis de Download (Agora conectadas ao Radar do Pinia!)
+// === VARIÁVEIS DE EDIÇÃO E EXCLUSÃO ===
+const showEditModal = ref(false)
+const trackToEdit = ref(null)
+const isSavingEdit = ref(false)
+const editForm = ref({ title: '', artist: '' })
+
+const showDeleteModal = ref(false)
+const trackToDelete = ref(null)
+const isDeleting = ref(false)
+
+// Variáveis de Download 
 const downloadingTracks = ref({})
 const isBatchActive = ref(false) 
 
-// O progresso agora é reativo! Ele olha para o banco de dados em tempo real.
 const batchTotal = computed(() => playerStore.tracks.length)
 const batchCompleted = computed(() => playerStore.tracks.filter(t => t.file_path).length)
-// Verifica se ainda existem músicas pendentes na playlist atual
 const isDownloadingAll = computed(() => isBatchActive.value && batchCompleted.value < batchTotal.value)
 
-// LÓGICA DE BUSCA
 const searchQuery = ref('')
 
 const filteredTracks = computed(() => {
@@ -37,7 +44,85 @@ const filteredTracks = computed(() => {
   })
 })
 
-// FUNÇÕES DE DOWNLOAD (Refatoradas para Background Jobs)
+// === FUNÇÕES DE EDIÇÃO ===
+const openEditModal = (track) => {
+  trackToEdit.value = track
+  editForm.value = { title: track.title, artist: track.artist || '' }
+  showEditModal.value = true
+}
+
+const saveTrackEdit = async () => {
+  if (!editForm.value.title.trim()) {
+    playerStore.notify('O título não pode estar vazio!', 'error')
+    return
+  }
+  
+  isSavingEdit.value = true
+  try {
+    const response = await fetch(`http://localhost:8000/api/tracks/${trackToEdit.value.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(editForm.value)
+    })
+
+    if (!response.ok) throw new Error('Erro ao atualizar música')
+
+    const index = playerStore.tracks.findIndex(t => t.id === trackToEdit.value.id)
+    if (index !== -1) {
+      playerStore.tracks[index].title = editForm.value.title
+      playerStore.tracks[index].artist = editForm.value.artist
+    }
+    
+    if (playerStore.currentTrack?.id === trackToEdit.value.id) {
+      playerStore.currentTrack.title = editForm.value.title
+      playerStore.currentTrack.artist = editForm.value.artist
+    }
+
+    playerStore.notify('Música atualizada!', 'success')
+    showEditModal.value = false
+  } catch (error) {
+    playerStore.notify('Erro ao salvar as alterações', 'error')
+  } finally {
+    isSavingEdit.value = false
+  }
+}
+
+// === FUNÇÕES DE EXCLUSÃO ===
+const openDeleteModal = (track) => {
+  trackToDelete.value = track
+  showDeleteModal.value = true
+}
+
+const confirmDeleteTrack = async () => {
+  if (!trackToDelete.value) return
+  isDeleting.value = true
+
+  try {
+    const response = await fetch(`http://localhost:8000/api/tracks/${trackToDelete.value.id}`, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' }
+    })
+
+    if (!response.ok) throw new Error('Erro ao excluir música')
+
+    playerStore.notify('Música excluída com sucesso!', 'success')
+    playerStore.tracks = playerStore.tracks.filter(t => t.id !== trackToDelete.value.id)
+    
+    if (playerStore.currentPlaylistId) {
+      playerStore.loadLibrary()
+    }
+    showDeleteModal.value = false
+  } catch (error) {
+    playerStore.notify('Erro ao excluir música', 'error')
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+// === DOWNLOAD & PLAYLISTS ===
 const downloadAudio = async (trackId) => {
   downloadingTracks.value[trackId] = true 
   try {
@@ -48,7 +133,6 @@ const downloadAudio = async (trackId) => {
     
     if (response.ok) {
       playerStore.notify('Download adicionado à fila!', 'success')
-      // LIGA O RADAR ASSIM QUE O USUÁRIO CLICAR!
       playerStore.startPlaylistStatusPolling(playerStore.currentPlaylistId)
     } else {
       throw new Error('Falha')
@@ -73,7 +157,6 @@ const downloadAll = async () => {
     return
   }
 
-  // Ativa o widget visual de progresso inferior
   isBatchActive.value = true
 
   try {
@@ -84,18 +167,14 @@ const downloadAll = async () => {
 
     if (response.ok) {
       playerStore.notify('Downloads em lote adicionados à fila!', 'success');
-      
-      // LIGA O RADAR ASSIM QUE O USUÁRIO CLICAR!
       playerStore.startPlaylistStatusPolling(playerStore.currentPlaylistId);
     }
   } catch (error) {
-    console.error("Erro ao enviar para fila:", error);
     playerStore.notify('Erro ao processar lote', 'error');
     isBatchActive.value = false;
   }
 }
 
-// FUNÇÕES DE PLAYLIST E EXPORTAÇÃO
 const openMoveModal = async (track) => {
   trackToMove.value = track
   await playerStore.loadLibrary()
@@ -132,10 +211,9 @@ const moveToPlaylist = async (playlistId) => {
 
 const exportToPendrive = () => {
   if (!playerStore.currentPlaylistId) {
-    alert("ERRO: O sistema acha que você não está dentro de uma playlist (ID está nulo). Clique em uma playlist no menu lateral primeiro!");
+    alert("ERRO: Selecione uma playlist no menu lateral primeiro!");
     return;
   }
-  
   playerStore.notify('A compactar músicas. O download vai começar em breve!', 'success');
   window.open(`http://localhost:8000/api/playlists/${playerStore.currentPlaylistId}/export`, '_blank');
 }
@@ -162,7 +240,6 @@ const exportToPendrive = () => {
             v-if="searchQuery" 
             @click="searchQuery = ''" 
             class="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-500 hover:text-white transition-colors"
-            title="Limpar busca"
           >
             <X class="w-4 h-4" />
           </button>
@@ -174,7 +251,7 @@ const exportToPendrive = () => {
             class="bg-emerald-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform flex items-center gap-2 text-sm shadow-lg shadow-emerald-900/20"
           >
             <DownloadCloud class="w-4 h-4" />
-            Exportar (.zip)
+            <span class="hidden sm:inline">Exportar (.zip)</span>
           </button>
 
           <button 
@@ -184,7 +261,7 @@ const exportToPendrive = () => {
           >
             <Loader2 v-if="isDownloadingAll" class="w-4 h-4 animate-spin" />
             <Download v-else class="w-4 h-4" />
-            {{ isDownloadingAll ? 'Na Fila de Download...' : 'Transferir Todas' }}
+            <span class="hidden sm:inline">{{ isDownloadingAll ? 'Na Fila de Download...' : 'Transferir Todas' }}</span>
           </button>
         </div>
       </div>
@@ -197,16 +274,12 @@ const exportToPendrive = () => {
           <div class="h-3.5 bg-neutral-800 rounded-full w-3/4"></div>
           <div class="h-2.5 bg-neutral-800 rounded-full w-1/2"></div>
         </div>
-        <div class="flex gap-2 items-center">
-          <div class="w-9 h-9 rounded-full bg-neutral-800"></div>
-          <div class="w-9 h-9 rounded-full bg-neutral-800"></div>
-        </div>
       </div>
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <div v-for="(track, index) in filteredTracks" :key="track.id"
-        class="bg-neutral-900/50 p-4 rounded-xl flex items-center gap-4 hover:bg-neutral-800 transition-colors border border-neutral-800/50 group"
+        class="bg-neutral-900/50 p-3 rounded-xl flex items-center gap-3 hover:bg-neutral-800 transition-colors border border-neutral-800/50 group relative"
         :class="playerStore.currentTrack?.id === track.id ? 'border-blue-500/60 bg-blue-900/10' : ''"
       >
         <img 
@@ -214,24 +287,41 @@ const exportToPendrive = () => {
           :src="track.cover_url" 
           @error="$event.target.src = 'https://placehold.co/100x100/262626/888?text=🎵'" 
           alt="Capa" 
-          class="w-14 h-14 rounded-md object-cover shadow-md" 
+          class="w-12 h-12 rounded-md object-cover shadow-md flex-shrink-0" 
         />
-        <div v-else class="w-14 h-14 rounded-md bg-neutral-800 flex items-center justify-center shadow-md">
+        <div v-else class="w-12 h-12 rounded-md bg-neutral-800 flex items-center justify-center shadow-md flex-shrink-0">
           <Music class="w-5 h-5 text-neutral-500" />
         </div>
 
-        <div class="flex-1 overflow-hidden">
+        <div class="flex-1 min-w-0 pr-2">
           <h4 class="font-bold text-sm text-white truncate" :class="playerStore.currentTrack?.id === track.id ? 'text-blue-400' : ''">
             {{ track.title }}
           </h4>
           <p class="text-xs text-neutral-400 truncate mt-0.5">{{ track.artist }}</p>
         </div>
 
-        <div class="flex gap-2 items-center">
+        <div class="flex gap-1 items-center bg-transparent xl:opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          
+          <button 
+            @click="openEditModal(track)"
+            class="w-8 h-8 rounded-full text-neutral-400 hover:text-blue-400 hover:bg-neutral-800 flex items-center justify-center transition-all"
+            title="Editar Música"
+          >
+            <Pencil class="w-4 h-4" />
+          </button>
+          
+          <button 
+            @click="openDeleteModal(track)"
+            class="w-8 h-8 rounded-full text-neutral-400 hover:text-red-400 hover:bg-neutral-800 flex items-center justify-center transition-all"
+            title="Excluir Música"
+          >
+            <Trash2 class="w-4 h-4" />
+          </button>
+
           <button 
             v-if="track.file_path"
             @click="openMoveModal(track)"
-            class="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white flex items-center justify-center transition-all"
+            class="w-8 h-8 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 flex items-center justify-center transition-all"
             title="Adicionar à Playlist"
           >
             <FolderPlus class="w-4 h-4" />
@@ -241,21 +331,22 @@ const exportToPendrive = () => {
             v-if="!track.file_path"
             @click="downloadAudio(track.id)"
             :disabled="downloadingTracks[track.id] || isDownloadingAll"
-            class="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-all disabled:opacity-50"
+            class="w-8 h-8 rounded-full text-white hover:bg-neutral-800 flex items-center justify-center transition-all disabled:opacity-50"
           >
             <Loader2 v-if="downloadingTracks[track.id] || isDownloadingAll" class="w-4 h-4 animate-spin text-blue-400" />
             <Download v-else class="w-4 h-4" />
           </button>
-
-          <button 
-            v-if="track.file_path"
-            @click="playerStore.playTrack(track, filteredTracks)"
-            class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center transition-transform hover:scale-105 shadow-[0_0_10px_rgba(37,99,235,0.3)]"
-          >
-            <Pause v-if="playerStore.currentTrack?.id === track.id && playerStore.isPlaying" class="w-4 h-4 fill-white" />
-            <Play v-else class="w-4 h-4 fill-white ml-0.5" /> 
-          </button>
         </div>
+
+        <button 
+          v-if="track.file_path"
+          @click="playerStore.playTrack(track, filteredTracks)"
+          class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center transition-transform hover:scale-105 shadow-[0_0_10px_rgba(37,99,235,0.3)] flex-shrink-0"
+        >
+          <Pause v-if="playerStore.currentTrack?.id === track.id && playerStore.isPlaying" class="w-4 h-4 fill-white" />
+          <Play v-else class="w-4 h-4 fill-white ml-0.5" /> 
+        </button>
+
       </div>
     </div>
 
@@ -269,51 +360,100 @@ const exportToPendrive = () => {
       </p>
     </div>
 
-    <div v-else-if="!playerStore.isLoadingTracks && filteredTracks.length === 0" class="flex flex-col items-center justify-center py-20 text-center w-full">
-      <div class="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-4 shadow-inner">
-        <Search class="w-10 h-10 text-neutral-600" />
-      </div>
-      <h3 class="text-xl font-bold text-white mb-2">Nenhum resultado</h3>
-      <p class="text-sm text-neutral-400 max-w-sm">
-        Não encontramos nenhuma música com "<span class="text-white">{{ searchQuery }}</span>" nesta lista.
-      </p>
-    </div>
-
-    <div v-if="showMoveModal" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity">
+    <div v-if="showEditModal" @click.self="showEditModal = false" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity">
       <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-transform scale-100 animate-slide-up">
         
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-bold text-white">Adicionar à Playlist</h3>
-          <button @click="showMoveModal = false" class="text-neutral-400 hover:text-white transition-colors">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <Pencil class="w-5 h-5 text-blue-500" />
+            Editar Música
+          </h3>
+          <button @click="showEditModal = false" class="text-neutral-400 hover:text-white transition-colors">
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <p class="text-sm text-neutral-400 mb-4 truncate">
-          Mover <strong class="text-white">{{ trackToMove?.title }}</strong> para:
+        <div class="flex flex-col gap-4 mb-6">
+          <div>
+            <label class="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Título da Música</label>
+            <input 
+              v-model="editForm.title" 
+              type="text" 
+              class="w-full bg-neutral-950 border border-neutral-800 text-white rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Artista</label>
+            <input 
+              v-model="editForm.artist" 
+              type="text" 
+              class="w-full bg-neutral-950 border border-neutral-800 text-white rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
+            />
+          </div>
+        </div>
+
+        <div class="flex gap-3">
+          <button @click="showEditModal = false" class="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2.5 rounded-xl transition-colors text-sm">
+            Cancelar
+          </button>
+          <button @click="saveTrackEdit" :disabled="isSavingEdit" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition-colors disabled:opacity-50 text-sm flex items-center justify-center gap-2">
+            <Loader2 v-if="isSavingEdit" class="w-4 h-4 animate-spin" /> Salvar
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <div v-if="showDeleteModal" @click.self="showDeleteModal = false" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity">
+      <div class="bg-neutral-900 border border-red-900/50 rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-transform scale-100 animate-slide-up">
+        
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <Trash2 class="w-5 h-5 text-red-500" />
+            Excluir Música
+          </h3>
+          <button @click="showDeleteModal = false" class="text-neutral-400 hover:text-white transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <p class="text-sm text-neutral-300 mb-6 leading-relaxed">
+          Tem certeza que deseja excluir permanentemente <strong>{{ trackToDelete?.title }}</strong>?<br>
+          <span class="text-red-400 text-xs mt-2 block">Esta ação apagará o ficheiro de áudio do seu computador. Não pode ser desfeita.</span>
         </p>
 
-        <div class="max-h-60 overflow-y-auto invisible-scrollbar flex flex-col gap-2 mb-6">
-          <button 
-            v-for="pl in playerStore.savedPlaylists" 
-            :key="pl.id"
-            @click="moveToPlaylist(pl.id)"
-            :disabled="isMoving"
-            class="flex items-center gap-3 p-3 rounded-xl bg-neutral-800/50 hover:bg-neutral-800 transition-colors border border-transparent hover:border-neutral-700 w-full text-left"
-          >
-            <div class="w-10 h-10 bg-neutral-950 rounded-md flex items-center justify-center flex-shrink-0">
-              <FolderPlus class="w-4 h-4 text-blue-500" />
-            </div>
-            <div class="flex-1 overflow-hidden">
-              <h4 class="font-bold text-sm text-white truncate">{{ pl.name }}</h4>
-              <p class="text-[11px] text-neutral-500">{{ pl.tracks_count }} faixas</p>
-            </div>
+        <div class="flex gap-3">
+          <button @click="showDeleteModal = false" class="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2.5 rounded-xl transition-colors text-sm">
+            Cancelar
+          </button>
+          <button @click="confirmDeleteTrack" :disabled="isDeleting" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl transition-colors disabled:opacity-50 text-sm flex items-center justify-center gap-2">
+            <Loader2 v-if="isDeleting" class="w-4 h-4 animate-spin" />
+            Sim, Excluir
           </button>
         </div>
 
       </div>
     </div>
     
+    <div v-if="showMoveModal" @click.self="showMoveModal = false" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity">
+      <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-transform scale-100 animate-slide-up">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-bold text-white">Adicionar à Playlist</h3>
+          <button @click="showMoveModal = false" class="text-neutral-400 hover:text-white transition-colors"><X class="w-5 h-5" /></button>
+        </div>
+        <p class="text-sm text-neutral-400 mb-4 truncate">Mover <strong class="text-white">{{ trackToMove?.title }}</strong> para:</p>
+        <div class="max-h-60 overflow-y-auto invisible-scrollbar flex flex-col gap-2 mb-6">
+          <button v-for="pl in playerStore.savedPlaylists" :key="pl.id" @click="moveToPlaylist(pl.id)" :disabled="isMoving" class="flex items-center gap-3 p-3 rounded-xl bg-neutral-800/50 hover:bg-neutral-800 transition-colors border border-transparent hover:border-neutral-700 w-full text-left">
+            <div class="w-10 h-10 bg-neutral-950 rounded-md flex items-center justify-center flex-shrink-0"><FolderPlus class="w-4 h-4 text-blue-500" /></div>
+            <div class="flex-1 overflow-hidden">
+              <h4 class="font-bold text-sm text-white truncate">{{ pl.name }}</h4>
+              <p class="text-[11px] text-neutral-500">{{ pl.tracks_count }} faixas</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="isDownloadingAll" class="fixed bottom-28 right-6 z-[100] bg-neutral-900 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex items-center gap-4 w-72 animate-slide-up">
       <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0 border border-blue-500/30">
         <Loader2 class="w-5 h-5 text-blue-400 animate-spin" />
@@ -324,10 +464,7 @@ const exportToPendrive = () => {
           <span class="text-xs text-blue-400 font-bold">{{ batchCompleted }} / {{ batchTotal }}</span>
         </div>
         <div class="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
-          <div 
-            class="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out" 
-            :style="{ width: `${(batchCompleted / batchTotal) * 100}%` }"
-          ></div>
+          <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out" :style="{ width: `${(batchCompleted / batchTotal) * 100}%` }"></div>
         </div>
       </div>
     </div>

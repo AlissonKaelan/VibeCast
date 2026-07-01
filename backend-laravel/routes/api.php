@@ -50,6 +50,9 @@ Route::put('/tracks/{id}/move', [TrackController::class, 'move']);
 // Rota para resetar o status de uma música deletada fisicamente
 Route::post('/tracks/{id}/reset-file', [\App\Http\Controllers\TrackController::class, 'resetFile']);
 
+Route::put('/tracks/{id}', [App\Http\Controllers\AudioController::class, 'updateTrack']);
+Route::delete('/tracks/{id}', [App\Http\Controllers\AudioController::class, 'deleteTrack']);
+
 // Rota para fazer streaming do áudio com suporte a avançar/recuar
 Route::get('/stream', [\App\Http\Controllers\AudioController::class, 'streamTrack']);
 

@@ -278,4 +278,48 @@ class AudioController extends Controller
             'tracks' => $tracks
         ]);
     }
+
+    /**
+     * Atualiza o Título e o Artista de uma música
+     */
+    public function updateTrack(Request $request, $id)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'artist' => 'nullable|string|max:255',
+        ]);
+
+        $track = \App\Models\Track::findOrFail($id);
+        $track->update([
+            'title' => $request->title,
+            'artist' => $request->artist
+        ]);
+
+        return response()->json([
+            'success' => true, 
+            'message' => 'Música atualizada com sucesso!', 
+            'track' => $track
+        ]);
+    }
+
+    /**
+     * Exclui uma música do banco de dados e apaga o arquivo de áudio do disco
+     */
+    public function deleteTrack($id)
+    {
+        $track = \App\Models\Track::findOrFail($id);
+
+        // Se a música já foi baixada, apaga o arquivo físico (.m4a) do disco!
+        if ($track->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($track->file_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($track->file_path);
+        }
+
+        // Apaga o registo do banco de dados
+        $track->delete();
+
+        return response()->json([
+            'success' => true, 
+            'message' => 'Música excluída permanentemente!'
+        ]);
+    }
 }
