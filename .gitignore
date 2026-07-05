@@ -1,2 +1,3 @@
 extractor-python/__pycache__/
 *.pyc
+*.exe
