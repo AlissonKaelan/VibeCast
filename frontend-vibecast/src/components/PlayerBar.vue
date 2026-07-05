@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, Music, List, Radio } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
+import { useSettingsStore } from '../stores/settingsStore'
+const settingsStore = useSettingsStore()
 
 const playerStore = usePlayerStore()
 

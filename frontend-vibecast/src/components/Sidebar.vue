@@ -1,13 +1,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, Home, Radio } from 'lucide-vue-next'
+import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, Home, Radio, Settings } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
+import { useSettingsStore } from '../stores/settingsStore'
 
 // Recebe do App.vue a tela atual e avisa quando quiser mudar
 defineProps(['currentView'])
 const emit = defineEmits(['change-view'])
 
 const playerStore = usePlayerStore()
+const settingsStore = useSettingsStore()
 
 // Controle do Modal Inteligente (Criação/Edição)
 const showModal = ref(false)
@@ -25,7 +27,6 @@ const selectPlaylist = async (playlistId) => {
   emit('change-view', 'library');
   playerStore.currentPlaylistId = playlistId;
   
-  //LIGA O SKELETON
   playerStore.isLoadingTracks = true; 
   
   try {
@@ -36,9 +37,12 @@ const selectPlaylist = async (playlistId) => {
   } catch (error) {
     console.error("Erro ao carregar músicas:", error);
   } finally {
-    // 👉 DESLIGA O SKELETON!
     playerStore.isLoadingTracks = false; 
   }
+}
+const debugarClique = () => {
+  console.log("=> PASSO 1: O botão na Sidebar foi fisicamente clicado!");
+  settingsStore.toggleSettingsModal();
 }
 
 const loadAll = () => {
@@ -147,7 +151,10 @@ onMounted(() => {
     
     <div class="flex items-center justify-between px-2">
       <div class="flex items-center gap-2">
-        <Library class="w-6 h-6 text-blue-500" />
+        <Library 
+          class="w-6 h-6 transition-colors duration-300" 
+          :class="settingsStore.theme.text" 
+        />
         <span class="font-extrabold text-lg tracking-tight">Biblioteca</span>
       </div>
       
@@ -241,6 +248,15 @@ onMounted(() => {
           </button>
         </div>
       </div>
+    </div>
+
+    <div class="mt-auto pt-4 border-t border-neutral-800/50 mb-2">
+      <button 
+        @click.stop="settingsStore.openSettingsModal()" 
+        class="w-full flex items-center gap-3 text-sm font-bold text-neutral-400 hover:text-white transition-colors p-3 rounded-lg hover:bg-neutral-800/50"
+      >
+        <Settings class="w-5 h-5" /> Configurações
+      </button>
     </div>
 
     <div v-if="showModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity">

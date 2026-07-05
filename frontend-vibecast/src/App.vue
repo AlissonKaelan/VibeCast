@@ -3,18 +3,17 @@ import { ref } from 'vue'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 
-// Importando a nossa nova armada de componentes fatiados!
 import Sidebar from './components/Sidebar.vue'
 import Import from './components/Import.vue'
 import TrackList from './components/TrackList.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
 import Radios from './components/Radios.vue'
+import SettingsModal from './components/SettingsModal.vue'
 
 import { usePlayerStore } from './stores/playerStore'
 const playerStore = usePlayerStore()
 
-// Estado para controlar a tela atual ('library' ou 'radios')
 const currentView = ref('library')
 </script>
 
@@ -52,24 +51,21 @@ const currentView = ref('library')
 
     <Import />
     <QueuePanel />
+    <SettingsModal />
   </div>
 </template>
 
 <style>
-/* Estilização para deixar o divisor do Splitpanes sutil */
 .splitpanes__splitter {
   background-color: transparent !important;
   border-left: 1px solid #262626 !important;
   width: 3px !important;
   cursor: col-resize;
 }
-
 .splitpanes__splitter:hover {
   background-color: #3b82f6 !important;
   transition: background-color 0.3s ease;
 }
-
-/* Animação suave para o balão de notificação entrar pela direita */
 @keyframes slideLeft { 
   from { opacity: 0; transform: translateX(20px); } 
   to { opacity: 1; transform: translateX(0); } 

@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { Download, Loader2, Music, Play, Pause, FolderPlus, X, DownloadCloud, Search, Pencil, Trash2 } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
+import { useSettingsStore } from '../stores/settingsStore'
+const settingsStore = useSettingsStore()
 
 const playerStore = usePlayerStore()
 
