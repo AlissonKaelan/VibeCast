@@ -126,7 +126,9 @@ const confirmDeleteTrack = async () => {
 
 // === DOWNLOAD & PLAYLISTS ===
 const downloadAudio = async (trackId) => {
-  downloadingTracks.value[trackId] = true 
+  downloadingTracks.value[trackId] = true // Inicia a rodinha no botão
+  isBatchActive.value = true // A MÁGICA: Ativa a barra de progresso global lá embaixo!
+  
   try {
     const response = await fetch(`http://localhost:8000/api/tracks/${trackId}/download`, { 
       method: 'POST',
@@ -135,14 +137,19 @@ const downloadAudio = async (trackId) => {
     
     if (response.ok) {
       playerStore.notify('Download adicionado à fila!', 'success')
+      // Liga o radar do Store para vigiar o banco de dados
       playerStore.startPlaylistStatusPolling(playerStore.currentPlaylistId)
+      
+      // NOTA: Não mudamos para "false" aqui de propósito!
+      // A rodinha vai continuar a girar até que o radar (Polling) receba 
+      // o 'file_path' do banco, fazendo o botão transformar-se no ícone de "Play" sozinho!
     } else {
-      throw new Error('Falha')
+      downloadingTracks.value[trackId] = false
+      throw new Error('Falha ao processar')
     }
   } catch (error) {
+    downloadingTracks.value[trackId] = false
     playerStore.notify('Erro ao enviar para fila', 'error')
-  } finally {
-    downloadingTracks.value[trackId] = false 
   }
 }
 

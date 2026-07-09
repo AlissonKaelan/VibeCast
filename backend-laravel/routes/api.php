@@ -6,6 +6,7 @@ use App\Http\Controllers\AudioController;
 use App\Http\Controllers\PlaylistController;
 use App\Http\Controllers\TrackController;
 use App\Http\Controllers\RadioController;
+use App\Http\Controllers\ImportYouTubeController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -71,3 +72,5 @@ Route::delete('/radios/{id}', [RadioController::class, 'destroy']);
 Route::get('/playlists/{id}/status', [App\Http\Controllers\AudioController::class, 'getPlaylistStatus']);
 
 Route::post('/playlists/{id}/download', [App\Http\Controllers\AudioController::class, 'downloadPlaylistTracks']);
+
+Route::post('/import/youtube', [ImportYouTubeController::class, 'import']);

@@ -16,6 +16,9 @@ class TrackQuery(BaseModel):
     title: str
     artist: str
 
+class YouTubeQuery(BaseModel):
+    url: str
+
 class PlaylistQuery(BaseModel):
     url: str
 
@@ -289,3 +292,67 @@ def download_direct(query: DownloadDirectQuery):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/import-youtube")
+def import_youtube(query: YouTubeQuery):
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True, # Extrai os metadados sem baixar os vídeos
+            'ignoreerrors': True, # Pula vídeos privados/deletados sem quebrar a playlist
+            'cookiefile': '/app/cookies.txt'
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query.url, download=False)
+            tracks = []
+            
+            if not info:
+                raise HTTPException(status_code=400, detail="A playlist ou vídeo está bloqueado ou é inválido.")
+
+            # Verifica se é uma playlist (tem 'entries') ou um vídeo único
+            if 'entries' in info:
+                collection_name = info.get('title', 'Playlist do YouTube')
+                for entry in info['entries']:
+                    if not entry:
+                        continue 
+                    
+                    title = entry.get('title')
+                    # YouTube retorna esses nomes genéricos para vídeos indisponíveis
+                    if not title or title in ['[Private video]', '[Deleted video]']:
+                        continue
+                        
+                    tracks.append({
+                        "title": title,
+                        "artist": entry.get('uploader') or entry.get('channel') or 'Artista Desconhecido',
+                        "cover_url": entry.get('thumbnails')[0]['url'] if entry.get('thumbnails') else None,
+                        "duration_seconds": entry.get('duration', 0),
+                        "youtube_url": entry.get('url'),
+                        "youtube_id": entry.get('id') # ID importantíssimo salvo direto!
+                    })
+            else:
+                title = info.get('title')
+                if not title:
+                    raise HTTPException(status_code=400, detail="Vídeo privado ou sem título válido.")
+                    
+                collection_name = title
+                tracks.append({
+                    "title": title,
+                    "artist": info.get('uploader') or info.get('channel') or 'Artista Desconhecido',
+                    "cover_url": info.get('thumbnail'),
+                    "duration_seconds": info.get('duration', 0),
+                    "youtube_url": info.get('webpage_url') or query.url,
+                    "youtube_id": info.get('id')
+                })
+                
+            return {
+                "playlist_name": collection_name,
+                "total_tracks": len(tracks),
+                "tracks_urls": tracks,
+                "message": f"Sucesso! {len(tracks)} músicas extraídas do YouTube."
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao raspar o YouTube: {str(e)}")

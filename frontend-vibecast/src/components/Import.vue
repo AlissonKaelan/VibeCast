@@ -5,7 +5,7 @@ import { X, Music, Youtube, FolderDot, ArrowLeft, Cloud } from 'lucide-vue-next'
 
 const playerStore = usePlayerStore()
 
-// null = Mostra as opções | 'spotify' ou 'soundcloud'
+// null = Mostra as opções | 'spotify', 'soundcloud' ou 'youtube'
 const selectedSource = ref(null) 
 const playlistUrl = ref('')
 const isLoading = ref(false)
@@ -18,10 +18,14 @@ const processImport = async () => {
 
   isLoading.value = true
   
-  // Decide qual rota do Laravel chamar
-  const endpoint = selectedSource.value === 'soundcloud' 
-    ? 'http://localhost:8000/api/import-soundcloud'
-    : 'http://localhost:8000/api/import-playlist'
+  // Decide qual rota do Laravel chamar com base na escolha do usuário
+  let endpoint = 'http://localhost:8000/api/import-playlist' // Padrão (Spotify)
+  
+  if (selectedSource.value === 'soundcloud') {
+    endpoint = 'http://localhost:8000/api/import-soundcloud'
+  } else if (selectedSource.value === 'youtube') {
+    endpoint = 'http://localhost:8000/api/import/youtube'
+  }
 
   try {
     const response = await fetch(endpoint, {
@@ -90,12 +94,11 @@ const closeModal = () => {
             <span class="font-bold text-white">SoundCloud</span>
           </button>
 
-          <button disabled class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/10 opacity-50 cursor-not-allowed">
-            <div class="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+          <button @click="selectedSource = 'youtube'" class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/30 hover:bg-red-500/10 hover:border-red-500/50 transition-all group">
+            <div class="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Youtube class="w-8 h-8 text-red-500" />
             </div>
             <span class="font-bold text-white">YouTube</span>
-            <span class="text-[10px] bg-neutral-700 px-2 py-1 rounded text-white font-bold uppercase tracking-wider absolute mt-28">Em breve</span>
           </button>
 
           <button disabled class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/10 opacity-50 cursor-not-allowed">
@@ -121,20 +124,33 @@ const closeModal = () => {
             <p class="text-sm font-medium text-orange-100">Cole o link de uma Música ou Set do SoundCloud abaixo.</p>
           </div>
 
+          <div v-if="selectedSource === 'youtube'" class="flex items-center gap-4 text-red-400 bg-red-500/10 p-4 rounded-lg border border-red-500/20">
+            <Youtube class="w-6 h-6" />
+            <p class="text-sm font-medium text-red-100">Cole o link de um Vídeo ou Playlist do YouTube.</p>
+          </div>
+
           <div class="flex gap-3">
             <input 
               v-model="playlistUrl" 
               type="text" 
-              :placeholder="selectedSource === 'spotify' ? 'Ex: https://open.spotify.com/...' : 'Ex: https://soundcloud.com/...'" 
-              class="flex-1 bg-black/50 border border-neutral-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-all"
-              :class="selectedSource === 'spotify' ? 'focus:border-green-500 focus:ring-1 focus:ring-green-500' : 'focus:border-orange-500 focus:ring-1 focus:ring-orange-500'"
+              :placeholder="selectedSource === 'youtube' ? 'Ex: https://www.youtube.com/watch?v=...' : (selectedSource === 'spotify' ? 'Ex: https://open.spotify.com/...' : 'Ex: https://soundcloud.com/...')" 
+              class="flex-1 bg-black/50 border border-neutral-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-all focus:ring-1"
+              :class="{
+                'focus:border-green-500 focus:ring-green-500': selectedSource === 'spotify', 
+                'focus:border-orange-500 focus:ring-orange-500': selectedSource === 'soundcloud',
+                'focus:border-red-500 focus:ring-red-500': selectedSource === 'youtube'
+              }"
               @keyup.enter="processImport"
             >
             <button 
               @click="processImport" 
               :disabled="isLoading"
               class="text-white px-8 py-3 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px]"
-              :class="selectedSource === 'spotify' ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'"
+              :class="{
+                'bg-green-600 hover:bg-green-500': selectedSource === 'spotify', 
+                'bg-orange-600 hover:bg-orange-500': selectedSource === 'soundcloud',
+                'bg-red-600 hover:bg-red-500': selectedSource === 'youtube'
+              }"
             >
               <span v-if="!isLoading">Importar</span>
               <span v-else class="flex items-center gap-2">
