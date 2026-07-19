@@ -48,35 +48,40 @@ const updateVolume = (event) => {
 <template>
   <div class="h-24 bg-neutral-900 border-t border-neutral-800 px-6 flex items-center justify-between select-none shadow-[0_-10px_30px_rgba(0,0,0,0.3)]">
     
-    <div class="flex items-center gap-4 w-1/4 min-w-[200px]">
-      <div v-if="playerStore.currentTrack" class="flex items-center gap-4 group cursor-pointer">
+    <div class="flex items-center flex-1 min-w-0 mr-6 w-1/4 max-w-[30%]">
+      
+      <div v-if="playerStore.currentTrack" class="flex items-center w-full group cursor-pointer">
         <img 
           :src="playerStore.currentTrack.cover_url || 'https://placehold.co/100x100/262626/888?text=🎵'" 
           @error="$event.target.src = 'https://placehold.co/100x100/262626/888?text=🎵'"
           alt="Capa" 
-          class="w-14 h-14 rounded-md object-cover shadow-lg bg-neutral-800" 
+          class="w-14 h-14 shrink-0 rounded-md object-cover shadow-lg bg-neutral-800 mr-4" 
         />
-        <div class="overflow-hidden">
-          <h4 class="font-bold text-sm text-white truncate group-hover:underline">
-            {{ playerStore.currentTrack.title }}
-          </h4>
+        
+        <div class="flex-1 overflow-hidden relative">
+          <div class="animate-marquee">
+            <h4 class="font-bold text-sm text-white group-hover:underline">
+              {{ playerStore.currentTrack.title }}
+            </h4>
+          </div>
           <p class="text-xs text-neutral-400 truncate mt-0.5">
             {{ playerStore.currentTrack.artist }}
           </p>
         </div>
       </div>
-      <div v-else class="flex items-center gap-4 opacity-40">
-        <div class="w-14 h-14 rounded-md bg-neutral-800 flex items-center justify-center">
+
+      <div v-else class="flex items-center gap-4 opacity-40 w-full">
+        <div class="w-14 h-14 shrink-0 rounded-md bg-neutral-800 flex items-center justify-center">
           <Music class="w-6 h-6 text-neutral-500" />
         </div>
-        <div>
-          <h4 class="font-bold text-sm text-white">Nenhuma faixa</h4>
-          <p class="text-xs text-neutral-400">Selecione uma música</p>
+        <div class="flex-1 overflow-hidden">
+          <h4 class="font-bold text-sm text-white truncate">Nenhuma faixa</h4>
+          <p class="text-xs text-neutral-400 truncate">Selecione uma música</p>
         </div>
       </div>
     </div>
 
-    <div class="flex flex-col items-center flex-1 max-w-2xl px-8">
+    <div class="flex flex-col items-center shrink-0 w-auto max-w-[40%] px-4 md:px-8">
       
       <div class="flex items-center gap-6 mb-2">
         <button 
@@ -217,3 +222,28 @@ const updateVolume = (event) => {
 
   </div>
 </template>
+<style scoped>
+/* Animação para o texto rolar infinitamente */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 15s linear infinite;
+  /* Espaçamento extra no final para não emendar o texto quando repetir */
+  padding-right: 2rem; 
+}
+
+/* Pausa a animação se o usuário colocar o mouse em cima para ler */
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Esconde a barra de rolagem que pode aparecer na div do texto */
+.invisible-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+</style>
