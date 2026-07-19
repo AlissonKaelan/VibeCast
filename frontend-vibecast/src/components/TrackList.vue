@@ -1,10 +1,10 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue' 
 import { Download, Loader2, Music, Play, Pause, FolderPlus, X, DownloadCloud, Search, Pencil, Trash2 } from 'lucide-vue-next'
 import { usePlayerStore } from '../stores/playerStore'
 import { useSettingsStore } from '../stores/settingsStore'
-const settingsStore = useSettingsStore()
 
+const settingsStore = useSettingsStore()
 const playerStore = usePlayerStore()
 
 onMounted(() => {
@@ -25,13 +25,31 @@ const showDeleteModal = ref(false)
 const trackToDelete = ref(null)
 const isDeleting = ref(false)
 
-// Variáveis de Download 
+// === CONTADOR INTELIGENTE DE DOWNLOADS ===
 const downloadingTracks = ref({})
-const isBatchActive = ref(false) 
+const activeDownloadIds = ref([]) 
 
-const batchTotal = computed(() => playerStore.tracks.length)
-const batchCompleted = computed(() => playerStore.tracks.filter(t => t.file_path).length)
-const isDownloadingAll = computed(() => isBatchActive.value && batchCompleted.value < batchTotal.value)
+const batchTotal = computed(() => activeDownloadIds.value.length)
+
+const batchCompleted = computed(() => {
+  // Conta quantas das músicas que estão na fila já receberam o arquivo (file_path)
+  return activeDownloadIds.value.filter(id => {
+    const track = playerStore.tracks.find(t => t.id === id)
+    return track && track.file_path
+  }).length
+})
+
+// A barra azul só aparece se tivermos músicas na fila e nem todas terminaram
+const isDownloadingGlobal = computed(() => activeDownloadIds.value.length > 0 && batchCompleted.value < batchTotal.value)
+
+// Limpa o contador automaticamente 3 segundos após finalizar, para a próxima vez começar do 0/1 de novo
+watch(isDownloadingGlobal, (isDownloading) => {
+  if (!isDownloading && activeDownloadIds.value.length > 0) {
+    setTimeout(() => {
+      activeDownloadIds.value = []
+    }, 3000)
+  }
+})
 
 const searchQuery = ref('')
 
@@ -126,8 +144,12 @@ const confirmDeleteTrack = async () => {
 
 // === DOWNLOAD & PLAYLISTS ===
 const downloadAudio = async (trackId) => {
-  downloadingTracks.value[trackId] = true // Inicia a rodinha no botão
-  isBatchActive.value = true // A MÁGICA: Ativa a barra de progresso global lá embaixo!
+  downloadingTracks.value[trackId] = true 
+  
+  // Adiciona APENAS esta música ao contador inteligente
+  if (!activeDownloadIds.value.includes(trackId)) {
+    activeDownloadIds.value.push(trackId)
+  }
   
   try {
     const response = await fetch(`http://localhost:8000/api/tracks/${trackId}/download`, { 
@@ -137,12 +159,7 @@ const downloadAudio = async (trackId) => {
     
     if (response.ok) {
       playerStore.notify('Download adicionado à fila!', 'success')
-      // Liga o radar do Store para vigiar o banco de dados
       playerStore.startPlaylistStatusPolling(playerStore.currentPlaylistId)
-      
-      // NOTA: Não mudamos para "false" aqui de propósito!
-      // A rodinha vai continuar a girar até que o radar (Polling) receba 
-      // o 'file_path' do banco, fazendo o botão transformar-se no ícone de "Play" sozinho!
     } else {
       downloadingTracks.value[trackId] = false
       throw new Error('Falha ao processar')
@@ -166,7 +183,9 @@ const downloadAll = async () => {
     return
   }
 
-  isBatchActive.value = true
+  // Adiciona o lote todo ao contador inteligente
+  const newIds = tracksToDownload.map(t => t.id)
+  activeDownloadIds.value = [...new Set([...activeDownloadIds.value, ...newIds])]
 
   try {
     const response = await fetch(`http://localhost:8000/api/playlists/${playerStore.currentPlaylistId}/download`, {
@@ -180,7 +199,7 @@ const downloadAll = async () => {
     }
   } catch (error) {
     playerStore.notify('Erro ao processar lote', 'error');
-    isBatchActive.value = false;
+    activeDownloadIds.value = []; // Limpa se der erro grave
   }
 }
 
@@ -265,12 +284,12 @@ const exportToPendrive = () => {
 
           <button 
             @click="downloadAll"
-            :disabled="isDownloadingAll"
+            :disabled="isDownloadingGlobal"
             class="bg-blue-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2 text-sm shadow-lg shadow-blue-900/20"
           >
-            <Loader2 v-if="isDownloadingAll" class="w-4 h-4 animate-spin" />
+            <Loader2 v-if="isDownloadingGlobal" class="w-4 h-4 animate-spin" />
             <Download v-else class="w-4 h-4" />
-            <span class="hidden sm:inline">{{ isDownloadingAll ? 'Na Fila de Download...' : 'Transferir Todas' }}</span>
+            <span class="hidden sm:inline">{{ isDownloadingGlobal ? 'Na Fila de Download...' : 'Transferir Todas' }}</span>
           </button>
         </div>
       </div>
@@ -339,10 +358,10 @@ const exportToPendrive = () => {
           <button 
             v-if="!track.file_path"
             @click="downloadAudio(track.id)"
-            :disabled="downloadingTracks[track.id] || isDownloadingAll"
+            :disabled="downloadingTracks[track.id]"
             class="w-8 h-8 rounded-full text-white hover:bg-neutral-800 flex items-center justify-center transition-all disabled:opacity-50"
           >
-            <Loader2 v-if="downloadingTracks[track.id] || isDownloadingAll" class="w-4 h-4 animate-spin text-blue-400" />
+            <Loader2 v-if="downloadingTracks[track.id]" class="w-4 h-4 animate-spin text-blue-400" />
             <Download v-else class="w-4 h-4" />
           </button>
         </div>
@@ -463,7 +482,7 @@ const exportToPendrive = () => {
       </div>
     </div>
 
-    <div v-if="isDownloadingAll" class="fixed bottom-28 right-6 z-[100] bg-neutral-900 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex items-center gap-4 w-72 animate-slide-up">
+    <div v-if="isDownloadingGlobal" class="fixed bottom-28 right-6 z-[100] bg-neutral-900 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex items-center gap-4 w-72 animate-slide-up">
       <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0 border border-blue-500/30">
         <Loader2 class="w-5 h-5 text-blue-400 animate-spin" />
       </div>

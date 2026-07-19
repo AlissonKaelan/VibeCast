@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Splitpanes, Pane } from 'splitpanes'
+import { FastAverageColor } from 'fast-average-color'
 import 'splitpanes/dist/splitpanes.css'
 
 import Sidebar from './components/Sidebar.vue'
@@ -15,10 +16,41 @@ import { usePlayerStore } from './stores/playerStore'
 const playerStore = usePlayerStore()
 
 const currentView = ref('library')
+
+// Instancia o extrator de cores
+const fac = new FastAverageColor()
+
+// Cor padrão do fundo (o mesmo slate-950 que tinhas antes)
+const dominantColor = ref('#020617') 
+
+// Fica a observar a música atual. Se mudar, extrai a nova cor
+watch(() => playerStore.currentTrack, async (newTrack) => {
+  if (newTrack && newTrack.cover_url) {
+    try {
+      // Cria uma imagem invisível para extrair a cor
+      const img = new Image()
+      img.crossOrigin = 'Anonymous' // Tenta evitar bloqueios de segurança (CORS)
+      img.src = newTrack.cover_url
+
+      img.onload = async () => {
+        const color = await fac.getColorAsync(img, { algorithm: 'dominant' })
+        // Escurece um pouco a cor para não encandear a vista e manter o contraste
+        dominantColor.value = color.hex 
+      }
+    } catch (e) {
+      console.warn("Não foi possível extrair a cor da capa", e)
+      dominantColor.value = '#020617' // Volta ao escuro se falhar
+    }
+  } else {
+    dominantColor.value = '#020617' // Rádio ou sem música
+  }
+}, { immediate: true, deep: true })
 </script>
 
 <template>
-  <div class="h-screen w-screen bg-gradient-to-br from-slate-950 to-black text-white flex flex-col overflow-hidden font-sans select-none">
+  <div 
+  class="h-screen w-screen text-white flex flex-col overflow-hidden font-sans select-none transition-colors duration-[2000ms] ease-in-out"
+  :style="{ background: `linear-gradient(to bottom right, ${dominantColor} 0%, #000000 80%)` }">
     
     <div 
       v-if="playerStore.notification.show" 
