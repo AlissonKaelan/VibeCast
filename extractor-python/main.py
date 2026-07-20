@@ -34,6 +34,16 @@ class DownloadQuery(BaseModel):
     title: str
     artist: str
 
+
+# --- NOVA ROTA DE STATUS ---
+@app.get("/status")
+def get_status():
+    # Verifica se a flag de atualização ainda existe
+    if os.path.exists("/app/is_updating.flag"):
+        return {"status": "updating", "message": "O extrator está recebendo atualizações de segurança. Tente novamente em alguns segundos."}
+    return {"status": "ready", "message": "Extrator operante."}
+
+    
 @app.get("/")
 def read_root():
     return {"status": "Microsservico Python Rodando", "service": "VibeCast Extractor"}

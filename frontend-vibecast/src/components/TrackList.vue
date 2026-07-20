@@ -145,8 +145,6 @@ const confirmDeleteTrack = async () => {
 // === DOWNLOAD & PLAYLISTS ===
 const downloadAudio = async (trackId) => {
   downloadingTracks.value[trackId] = true 
-  
-  // Adiciona APENAS esta música ao contador inteligente
   if (!activeDownloadIds.value.includes(trackId)) {
     activeDownloadIds.value.push(trackId)
   }
@@ -157,16 +155,25 @@ const downloadAudio = async (trackId) => {
       headers: { 'Accept': 'application/json' }
     })
     
+    const data = await response.json()
+
     if (response.ok) {
       playerStore.notify('Download adicionado à fila!', 'success')
       playerStore.startPlaylistStatusPolling(playerStore.currentPlaylistId)
     } else {
       downloadingTracks.value[trackId] = false
-      throw new Error('Falha ao processar')
+      
+      // Intercepta o erro 503 de atualização
+      if (response.status === 503 || data.error_type === 'updating') {
+         playerStore.notify('Atualização em andamento. Tente novamente em 1 minuto.', 'error');
+         // Opcional: pode até tirar o ID da activeDownloadIds aqui se quiser limpar a barra azul
+      } else {
+         throw new Error(data.message || 'Falha ao processar')
+      }
     }
   } catch (error) {
     downloadingTracks.value[trackId] = false
-    playerStore.notify('Erro ao enviar para fila', 'error')
+    playerStore.notify(error.message || 'Erro ao enviar para fila', 'error')
   }
 }
 

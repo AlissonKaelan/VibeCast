@@ -2,75 +2,112 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Http;
 use App\Http\Controllers\AudioController;
 use App\Http\Controllers\PlaylistController;
 use App\Http\Controllers\TrackController;
 use App\Http\Controllers\RadioController;
 use App\Http\Controllers\ImportYouTubeController;
+use App\Models\Track;
+use App\Jobs\DownloadAudioJob;
 
+/*
+|--------------------------------------------------------------------------
+| Rotas de Utilizador (Sanctum)
+|--------------------------------------------------------------------------
+*/
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-// Listar todas as músicas (Aba Início)
-Route::get('/tracks', [\App\Http\Controllers\TrackController::class, 'index']);
-
-// Rota da nossa API VibeCast (sem bloqueios do web)
-Route::post('/track/stream', [AudioController::class, 'getStreamUrl']);
-
-// O motor real está de volta!
+/*
+|--------------------------------------------------------------------------
+| Rotas de Importação (Pontes para o Python)
+|--------------------------------------------------------------------------
+*/
+Route::post('/import-playlist', [AudioController::class, 'importPlaylist']);
+Route::post('/import-soundcloud', [AudioController::class, 'importSoundcloud']);
+Route::post('/import/youtube', [ImportYouTubeController::class, 'import']);
 Route::post('/playlist/import', [PlaylistController::class, 'import']);
 
-// Rota para baixar a música fisicamente para o PC
-Route::post('/tracks/{id}/download', [AudioController::class, 'downloadTrack']);
-
-// Rota para disparar o download em lote (Fila)
-Route::post('/playlists/{id}/download-all', [AudioController::class, 'downloadPlaylistTracks']);
-
-// Rota para consultar o status atualizado da playlist (Polling)
+/*
+|--------------------------------------------------------------------------
+| Rotas de Playlists
+|--------------------------------------------------------------------------
+*/
+Route::get('/playlists', [PlaylistController::class, 'index']);
+Route::post('/playlists', [PlaylistController::class, 'store']);
 Route::get('/playlists/{id}', [PlaylistController::class, 'show']);
-
-// Rota para listar todas as playlists na Biblioteca
-Route::get('/playlists', [PlaylistController::class, 'index']);
-
-// Rota para listar todas as playlists na Biblioteca
-Route::get('/playlists', [PlaylistController::class, 'index']);
-
-// NOVA ROTA: Criar playlist manual
-Route::post('/playlists', [PlaylistController::class, 'store']);
-
-// Rotas de gerenciamento de Playlists
-Route::get('/playlists', [PlaylistController::class, 'index']);
-Route::post('/playlists', [PlaylistController::class, 'store']);
 Route::put('/playlists/{id}', [PlaylistController::class, 'update']);
 Route::delete('/playlists/{id}', [PlaylistController::class, 'destroy']);
+Route::get('/playlists/{id}/status', [AudioController::class, 'getPlaylistStatus']);
+Route::get('/playlists/{id}/export', [AudioController::class, 'exportPlaylist']);
 
-// Mover música para outra playlist
+/*
+|--------------------------------------------------------------------------
+| Rotas de Músicas (Tracks)
+|--------------------------------------------------------------------------
+*/
+Route::get('/tracks', [TrackController::class, 'index']);
+Route::put('/tracks/{id}', [AudioController::class, 'updateTrack']);
+Route::delete('/tracks/{id}', [AudioController::class, 'deleteTrack']);
 Route::put('/tracks/{id}/move', [TrackController::class, 'move']);
+Route::post('/tracks/{id}/reset-file', [TrackController::class, 'resetFile']);
 
-// Rota para resetar o status de uma música deletada fisicamente
-Route::post('/tracks/{id}/reset-file', [\App\Http\Controllers\TrackController::class, 'resetFile']);
+/*
+|--------------------------------------------------------------------------
+| Rotas de Áudio e Streaming
+|--------------------------------------------------------------------------
+*/
+Route::get('/stream', [AudioController::class, 'streamTrack']);
+Route::post('/track/stream', [AudioController::class, 'getStreamUrl']);
 
-Route::put('/tracks/{id}', [App\Http\Controllers\AudioController::class, 'updateTrack']);
-Route::delete('/tracks/{id}', [App\Http\Controllers\AudioController::class, 'deleteTrack']);
-
-// Rota para fazer streaming do áudio com suporte a avançar/recuar
-Route::get('/stream', [\App\Http\Controllers\AudioController::class, 'streamTrack']);
-
-// Rota da ponte de Importação do Spotify
-Route::post('/import-playlist', [\App\Http\Controllers\AudioController::class, 'importPlaylist']);
-// Rota para exportar a playlist inteira em .zip para o Pendrive
-Route::get('/playlists/{id}/export', [\App\Http\Controllers\AudioController::class, 'exportPlaylist']);
-
-Route::post('/import-soundcloud', [App\Http\Controllers\AudioController::class, 'importSoundcloud']);
-
-// Rotas para as Web Rádios
+/*
+|--------------------------------------------------------------------------
+| Rotas de Web Rádio
+|--------------------------------------------------------------------------
+*/
 Route::get('/radios', [RadioController::class, 'index']);
 Route::post('/radios', [RadioController::class, 'store']);
 Route::delete('/radios/{id}', [RadioController::class, 'destroy']);
 
-Route::get('/playlists/{id}/status', [App\Http\Controllers\AudioController::class, 'getPlaylistStatus']);
+/*
+|--------------------------------------------------------------------------
+| Lógica Mestre de Downloads (Com Proteção de Atualização)
+|--------------------------------------------------------------------------
+*/
 
-Route::post('/playlists/{id}/download', [App\Http\Controllers\AudioController::class, 'downloadPlaylistTracks']);
+// Rota para disparar o download em lote
+Route::post('/playlists/{id}/download', [AudioController::class, 'downloadPlaylistTracks']);
+Route::post('/playlists/{id}/download-all', [AudioController::class, 'downloadPlaylistTracks']);
 
-Route::post('/import/youtube', [ImportYouTubeController::class, 'import']);
+// Rota Protegida para baixar música individual
+Route::post('/tracks/{id}/download', function ($id) {
+    // 1. O Laravel liga para o Python para saber se ele está ocupado a atualizar
+    try {
+        // Usa o nome do serviço docker 'vibecast-python-extractor-1' ou apenas 'extractor-python' dependendo do seu compose
+        $response = Http::timeout(3)->get('http://vibecast-python-extractor-1:5000/status');
+        $data = $response->json();
+
+        if (isset($data['status']) && $data['status'] === 'updating') {
+            return response()->json([
+                'success' => false,
+                'error_type' => 'updating',
+                'message' => 'Servidor em manutenção automática (Atualização de segurança). Tente baixar novamente daqui a um minuto.'
+            ], 503); 
+        }
+    } catch (\Exception $e) {
+        // Se a API não responder, assume que está a reiniciar
+        return response()->json([
+            'success' => false,
+            'error_type' => 'updating',
+            'message' => 'O motor de download está a aquecer. Aguarde um instante.'
+        ], 503);
+    }
+
+    // 2. Se o Python estiver livre, despacha o trabalho para a fila (O mesmo que o AudioController faz)
+    $track = Track::findOrFail($id);
+    dispatch(new DownloadAudioJob($track));
+    
+    return response()->json(['success' => true]);
+});
