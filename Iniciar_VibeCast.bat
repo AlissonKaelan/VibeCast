@@ -44,7 +44,7 @@ echo.
 
 :: 1. Inicia TODOS os conteineres de forma DINAMICA (Sem chumbar nome de usuario)
 echo [1/3] Ligando os conteineres do VibeCast...
-%WSL_CMD% -d %WSL_DISTRO% -e bash -c "cd ~/Projetos/VibeCast && docker compose up -d"
+%WSL_CMD% -d %WSL_DISTRO% -e bash -c "cd $HOME/Projetos/VibeCast && docker compose up -d"
 echo.
 
 :: 2. Pausa para o Vite
@@ -74,7 +74,7 @@ if "%ERRORLEVEL%"=="0" (
 :: Se chegou aqui, a janela foi fechada!
 echo.
 echo Janela fechada detectada! Encerrando e destruindo os conteineres do VibeCast...
-%WSL_CMD% -d %WSL_DISTRO% -e bash -c "cd ~/Projetos/VibeCast && docker compose down"
+%WSL_CMD% -d %WSL_DISTRO% -e bash -c "cd $HOME/Projetos/VibeCast && docker compose down"
 
 :: (Libera 100% de RAM e CPU)
 echo Desligando o Motor do Docker...

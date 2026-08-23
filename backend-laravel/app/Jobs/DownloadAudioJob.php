@@ -21,9 +21,10 @@ class DownloadAudioJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct($trackId)
+    public function __construct($trackOrId)
     {
-        $this->trackId = $trackId;
+        // Extrai apenas o número do ID, quer o Controller envie o número direto ou a música inteira
+        $this->trackId = is_object($trackOrId) ? $trackOrId->id : (is_array($trackOrId) ? $trackOrId['id'] : $trackOrId);
     }
 
     /**

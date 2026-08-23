@@ -4,6 +4,7 @@ services:
     build:
       context: ./backend-laravel
       dockerfile: Dockerfile
+    #command: tail -f /dev/null
     image: spotube-laravel-app
     restart: unless-stopped
     tty: true
