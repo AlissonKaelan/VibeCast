@@ -322,4 +322,49 @@ class AudioController extends Controller
             'message' => 'Música excluída permanentemente!'
         ]);
     }
+
+    public function wakeServices()
+    {
+        $containers = ['vibecast-python-extractor-1', 'vibecast-queue-worker'];
+        $debug = [];
+
+        foreach ($containers as $container) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_UNIX_SOCKET_PATH, '/var/run/docker.sock');
+            curl_setopt($ch, CURLOPT_URL, "http://localhost/containers/{$container}/start");
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+            
+            // O Segredo: "Content-Type:" vazio arranca o cabeçalho intrometido do cURL
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type:', 'Content-Length: 0']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, ""); // Corpo estritamente nulo
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            
+            curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE); 
+            $debug[$container] = "Status {$httpCode}";
+            curl_close($ch);
+        }
+
+        return response()->json(['status' => 'online', 'debug' => $debug]);
+    }
+
+    public function sleepServices()
+    {
+        $containers = ['vibecast-python-extractor-1', 'vibecast-queue-worker'];
+        
+        foreach ($containers as $container) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_UNIX_SOCKET_PATH, '/var/run/docker.sock');
+            // Altera a rota da API do Docker para /stop
+            curl_setopt($ch, CURLOPT_URL, "http://localhost/containers/{$container}/stop");
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type:', 'Content-Length: 0']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, "");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+
+        return response()->json(['status' => 'offline', 'message' => 'Serviços adormecidos. Hardware liberado!']);
+    }
 }

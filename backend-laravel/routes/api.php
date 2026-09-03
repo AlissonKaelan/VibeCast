@@ -11,6 +11,11 @@ use App\Http\Controllers\ImportYouTubeController;
 use App\Models\Track;
 use App\Jobs\DownloadAudioJob;
 
+
+
+Route::post('/services/wake', [App\Http\Controllers\AudioController::class, 'wakeServices']);
+Route::post('/services/sleep', [App\Http\Controllers\AudioController::class, 'sleepServices']);
+
 /*
 |--------------------------------------------------------------------------
 | Rotas de Utilizador (Sanctum)
@@ -53,7 +58,6 @@ Route::put('/tracks/{id}', [AudioController::class, 'updateTrack']);
 Route::delete('/tracks/{id}', [AudioController::class, 'deleteTrack']);
 Route::put('/tracks/{id}/move', [TrackController::class, 'move']);
 Route::post('/tracks/{id}/reset-file', [TrackController::class, 'resetFile']);
-
 /*
 |--------------------------------------------------------------------------
 | Rotas de Áudio e Streaming
