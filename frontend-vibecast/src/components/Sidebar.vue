@@ -4,6 +4,31 @@ import { Library, ListMusic, Plus, X, Loader2, Pencil, Trash2, AlertTriangle, Ho
 import { usePlayerStore } from '../stores/playerStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
+const isOnline = ref(false)
+const isWaking = ref(false)
+
+const toggleOnlineMode = async () => {
+  isWaking.value = true
+  const endpoint = isOnline.value ? '/api/services/sleep' : '/api/services/wake'
+  
+  try {
+    const response = await fetch(`http://localhost:8000${endpoint}`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' }
+    })
+    
+    if (response.ok) {
+      isOnline.value = !isOnline.value // Inverte o estado atual
+      console.log(isOnline.value ? 'Motores ligados!' : 'Motores desligados. RAM liberada.')
+    }
+  } catch (error) {
+    console.error('Falha na orquestração:', error)
+  } finally {
+    isWaking.value = false
+  }
+}
+
+
 // Recebe do App.vue a tela atual e avisa quando quiser mudar
 defineProps(['currentView'])
 const emit = defineEmits(['change-view'])
@@ -180,7 +205,17 @@ onMounted(() => {
         Todas as Músicas
       </div>
     </div>
-
+    <button 
+      @click="toggleOnlineMode" 
+      :disabled="isWaking"
+      class="w-full flex items-center gap-3 p-3 mt-4 mb-2 rounded-lg cursor-pointer transition-all border"
+      :class="isOnline ? 'bg-red-600/20 border-red-500/50 hover:bg-red-600/40 text-red-100 shadow-[0_0_15px_rgba(220,38,38,0.15)]' : 'bg-neutral-800 border-neutral-700 hover:bg-neutral-700 text-white shadow-[0_0_15px_rgba(34,197,94,0.15)]'"
+    >
+      <svg v-if="!isWaking" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+      
+      <span v-if="isWaking" class="animate-pulse">Orquestrando Motores...</span>
+      <span v-else class="font-bold">{{ isOnline ? 'Desligar Motores (Ficar Offline)' : 'Ficar Online' }}</span>
+    </button>
     <button 
       @click="playerStore.openImportModal()" 
       class="w-full flex items-center gap-3 p-3 mt-1 mb-2 rounded-lg cursor-pointer transition-all bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 text-blue-100 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
