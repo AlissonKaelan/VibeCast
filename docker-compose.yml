@@ -4,7 +4,7 @@ services:
     build:
       context: ./backend-laravel
       dockerfile: Dockerfile
-    #command: tail -f /dev/null
+    # command: tail -f /dev/null
     image: spotube-laravel-app
     restart: unless-stopped
     tty: true
@@ -12,6 +12,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend-laravel:/var/www
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - db
     networks:
