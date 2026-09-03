@@ -3,3 +3,4 @@ extractor-python/__pycache__/
 *.exe
 __pycache__/
 *.pyc
+extractor-python/cookies.txt
