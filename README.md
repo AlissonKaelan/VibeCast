@@ -58,7 +58,7 @@ O Docker no Windows funciona através de uma máquina virtual Linux (WSL2). Mant
 ```bash
 mkdir -p ~/projetos
 cd ~/projetos
-git clone https://github.com/AlissonKaelan/VibeCast
+git clone [https://github.com/AlissonKaelan/VibeCast](https://github.com/AlissonKaelan/VibeCast)
 
 ```
 
@@ -70,7 +70,7 @@ git clone https://github.com/AlissonKaelan/VibeCast
 * Caso prefira essa abordagem, abra o PowerShell/Git Bash e execute:
 
 ```bash
-git clone https://github.com/AlissonKaelan/VibeCast
+git clone [https://github.com/AlissonKaelan/VibeCast](https://github.com/AlissonKaelan/VibeCast)
 
 ```
 
@@ -86,14 +86,21 @@ O YouTube bloqueia downloads automatizados que não possuem identificação. Par
 ### 3. Configurando a API Core (Laravel)
 
 * Acesse a pasta `backend-laravel/` e copie o arquivo `.env.example` renomeando-o para `.env`.
-* Altere as configurações de banco de dados e fila no `.env`:
+* Altere as configurações de banco de dados e fila no `.env` para os seguintes valores:
 
 ```env
 APP_TIMEZONE=America/Sao_Paulo
-DB_HOST=db
 QUEUE_CONNECTION=database
 
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=VibeCast
+DB_USERNAME=root
+DB_PASSWORD=root_password_local
+
 ```
+
+> **Atenção:** Estes são os dados padrão já configurados no banco de dados do contêiner. Caso deseje alterar essas informações (como a senha ou o nome do banco), você precisará abrir também o arquivo `docker-compose.yml` na raiz do projeto e atualizar as variáveis de ambiente do contêiner do banco de dados antes de iniciar o projeto.
 
 ---
 
