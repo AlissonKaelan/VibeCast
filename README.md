@@ -1,10 +1,12 @@
-# **VibeCast** 🎵
+# VibeCast
 
-O VibeCast é uma plataforma de streaming de áudio independente e de código aberto. A aplicação separa a interface visual da fonte real da mídia, utilizando links públicos do Spotify para importar metadados (como uma prateleira) e extraindo o áudio puro diretamente do YouTube Music.
+O VibeCast é uma plataforma de streaming de áudio independente e de código aberto, criada com o objetivo de permitir escutar e baixar músicas do Spotify e YouTube de forma totalmente gratuita e sem anúncios. A aplicação separa a interface visual da fonte real da mídia, utilizando links públicos do Spotify para importar metadados (como uma prateleira) e extraindo o áudio puro diretamente do YouTube Music.
 
-## 🚀 Arquitetura do Projeto
+> **Nota de Desenvolvimento:** O foco principal deste projeto foi resolver um problema pessoal e servir como laboratório de aprendizado contínuo. Por isso, você poderá encontrar comentários explicativos detalhados espalhados pelos arquivos detalhando lógicas e conceitos estudados (como diretivas reativas no Vue.js). Estes comentários didáticos serão limpos e removidos com o tempo.
 
-O projeto adota uma arquitetura de múltiplos microsserviços **100% orquestrada em contêineres** (Backend, Banco, Extrator, Trabalhador de Fila e Frontend isolados).
+## Arquitetura do Projeto
+
+O projeto adota uma arquitetura de múltiplos microsserviços 100% orquestrada em contêineres (Backend, Banco, Extrator, Trabalhador de Fila e Frontend isolados).
 
 | Camada | Tecnologia | Função Principal |
 | --- | --- | --- |
@@ -16,7 +18,7 @@ O projeto adota uma arquitetura de múltiplos microsserviços **100% orquestrada
 
 ---
 
-## 🎧 Funcionalidades Atuais
+## Funcionalidades Atuais
 
 * **Motor de Importação:** Conversão automática de playlists do Spotify para arquivos físicos via YouTube Music.
 * **Player Avançado:** Controles de volume dinâmico, barra de progresso interativa (arrastável), reprodução contínua e integração com biblioteca local.
@@ -27,72 +29,135 @@ O projeto adota uma arquitetura de múltiplos microsserviços **100% orquestrada
 
 ---
 
-## 🛠️ Requisitos de Ambiente
+## Requisitos de Ambiente
 
-Para rodar o projeto do zero em uma máquina nova, você precisará apenas de:
+Para rodar o projeto do zero em uma máquina nova, você precisará de:
 
-* **Docker Desktop** com a integração WSL 2 ativada (para usuários de Windows/Ubuntu).
+* **Docker Engine** (Para usuários de Windows ou macOS, instale o **Docker Desktop**).
+* **WSL 2 (Ubuntu/Linux) ativado** (Obrigatório apenas para usuários de Windows, garantindo que o Docker funcione corretamente).
 * **Git** (para clonar o repositório).
-* *(O Node.js e o PHP não precisam mais ser instalados na máquina física, pois o Docker construirá contêineres virgens com as versões exatas necessárias).*
+* **Extensão de Navegador:** "Get cookies.txt LOCALLY" (necessária para autenticação de downloads).
+
+*(Não é necessário instalar Node.js, PHP ou Python na sua máquina física, o Docker se encarregará de construir contêineres virgens com as versões exatas necessárias).*
 
 ---
 
-## 🚀 Como executar o projeto
+## Passo a Passo de Instalação e Configuração
 
-Você pode iniciar o VibeCast de forma **Automatizada** (recomendado para uso diário) ou **Manual** (para desenvolvedores).
+Para que o motor de downloads funcione e evite bloqueios de segurança do YouTube, a configuração de cookies é uma etapa obrigatória antes de iniciar o sistema.
 
-### Opção A: Início Automatizado (Windows)
+### 1. Clonagem do Repositório
 
-Se você utiliza Windows com WSL (Ubuntu), um script executável foi criado para ligar tudo com um clique:
+Para usuários de **Windows**, a escolha do local onde o projeto será clonado afeta drasticamente o desempenho do Docker. Oferecemos duas opções abaixo, sendo a primeira fortemente recomendada.
 
-1. Clone o repositório: `git clone https://github.com/AlissonKaelan/VibeCast`
-2. Configure o arquivo `.env` do Laravel (veja as instruções no passo 2 da Opção B).
-3. Na raiz do projeto, dê um duplo clique no arquivo **`Iniciar_VibeCast.bat`**.
-4. O script iniciará o Docker silenciosamente, aguardará a inicialização do Vite e do Banco de Dados, e abrirá o aplicativo automaticamente no seu navegador Chrome.
+**Opção 1 (Recomendada para Windows e Padrão para Linux): Clonar dentro do WSL2**
 
-### Opção B: Inicialização Manual (Linux / Mac / Dev)
+O Docker no Windows funciona através de uma máquina virtual Linux (WSL2). Manter os arquivos dentro do sistema de arquivos nativo do Linux (`/home/...`) garante máxima velocidade de leitura e escrita, evita problemas de permissão e impede travamentos no *hot-reload* do Vue.js.
 
-Caso prefira levantar os serviços manualmente pelo terminal, siga o passo a passo cronológico:
+* Abra o terminal do seu Ubuntu (WSL) e execute:
+```bash
+mkdir -p ~/projetos
+cd ~/projetos
+git clone https://github.com/AlissonKaelan/VibeCast
 
-**1. Clonagem e Orquestração**
+```
 
-* Clone o repositório: `git clone https://github.com/AlissonKaelan/VibeCast`
-* Acesse a pasta do projeto no terminal.
-* Suba a infraestrutura completa executando: `docker compose up -d`
-*(O Docker iniciará o Vue na porta `5173`, o Python na `5000`, o Laravel na `8000` e o Queue Worker em background).*
+*(Dica: Se estiver usando o VS Code, basta digitar `code VibeCast/` neste terminal para abrir o projeto com integração total ao Linux).*
 
-**2. Configurando a API Core (Laravel) e Banco de Dados**
+**Opção 2: Clonar em uma pasta normal do Windows (Ex: `C:\Users\...`)**
+
+* **Aviso de Desempenho:** Se você salvar o projeto no disco do Windows, toda vez que os contêineres precisarem ler um arquivo, eles usarão uma "ponte" de rede para acessar o disco local, o que deixa a aplicação, a instalação de pacotes (Composer/NPM) e o servidor incrivelmente lentos.
+* Caso prefira essa abordagem, abra o PowerShell/Git Bash e execute:
+
+```bash
+git clone https://github.com/AlissonKaelan/VibeCast
+
+```
+
+### 2. Autenticação Obrigatória (Cookies)
+
+O YouTube bloqueia downloads automatizados que não possuem identificação. Para o sistema funcionar, você deve fornecer um arquivo de sessão válido.
+
+* Instale a extensão **Get cookies.txt LOCALLY** em seu navegador (Chrome, Edge ou Firefox).
+* Acesse o YouTube e faça login utilizando uma conta secundária ou descartável. **Nunca utilize sua conta pessoal principal por questões de segurança de dados.**
+* Com o YouTube aberto, clique na extensão e exporte o arquivo de cookies.
+* Renomeie o arquivo baixado para `cookies.txt` e cole-o obrigatoriamente dentro do projeto no caminho exato: `VibeCast/extractor-python/cookies.txt`.
+
+### 3. Configurando a API Core (Laravel)
 
 * Acesse a pasta `backend-laravel/` e copie o arquivo `.env.example` renomeando-o para `.env`.
 * Altere as configurações de banco de dados e fila no `.env`:
-* `APP_TIMEZONE=America/Sao_Paulo`
-* `DB_HOST=db`
-* `QUEUE_CONNECTION=database`
 
+```env
+APP_TIMEZONE=America/Sao_Paulo
+DB_HOST=db
+QUEUE_CONNECTION=database
 
-* Entre no contêiner do backend para rodar os comandos administrativos:
-* `docker compose exec app bash`
-* Dentro do contêiner, execute:
-* `composer install` *(Instala dependências do PHP)*
-* `php artisan migrate:fresh` *(Cria as tabelas do banco)*
-* `php artisan storage:link` *(Cria atalho para ler os áudios e imagens públicas)*
-
-
-* Digite `exit` para sair do contêiner.
-
-
-
-**3. Acessando a Aplicação**
-
-* Abra o seu navegador e acesse: `http://localhost:5173`
+```
 
 ---
 
-## 🗺️ Roadmap e Próximos Passos
+## Otimização de Hardware (Memória RAM no Windows)
 
-O núcleo duro de download físico, arquitetura de banco de dados e reprodução contínua estão prontos. As próximas fases planeadas para coroar o VibeCast v1.0 incluem:
+Por padrão, o ecossistema do Linux no Windows (processo `VmmemWSL`) pode alocar até 50% de toda a memória RAM do seu computador. Se você deseja rodar o VibeCast e continuar utilizando o PC para jogos ou programação simultânea, você pode travar o limite de memória do Docker.
 
-* **Motor de Temas Dinâmico:** Painel de customização visual permitindo trocar a cor de destaque (Azul, Roxo, Verde, etc.) e ativar/desativar o Glassmorphism (Efeito vidro) reativamente. *(Em desenvolvimento)*
-* **Responsividade e PWA:** Otimização absoluta da interface para telas de smartphones e configuração de Service Workers (manifest.json) para instalação do App Nativo mobile direto pelo navegador.
-* **Letras de Músicas (Opcional):** Integração com APIs abertas de Lyrics para exibir a letra da faixa atual em tempo real.
-* **Selagem para Produção (Deploy):** Criação de um `Dockerfile` de produção focado em performance, removendo os volumes em tempo real para permitir a hospedagem em VPS de nuvem pública.
+**Como aplicar a trava de memória:**
+
+1. Abra o Bloco de Notas do Windows e cole o seguinte código:
+
+```ini
+[wsl2]
+memory=2GB
+processors=2
+
+```
+
+2. Salve o arquivo com o nome exato de `.wslconfig` na raiz da pasta do seu usuário do Windows (Exemplo: `C:\Users\SeuUsuario\.wslconfig`).
+3. **Atenção à extensão:** O Bloco de Notas costuma esconder a extensão e salvar o arquivo como `.wslconfig.txt`. Certifique-se de ir na aba "Exibir" do Explorador de Arquivos, ativar a visualização de "Extensões de nomes de arquivos" e apagar o `.txt` do final.
+4. Abra o PowerShell e digite `wsl --shutdown` (ou reinicie o computador). Ao ligar o Docker novamente, ele estará limitado a 2GB de RAM.
+
+> **Importante sobre Múltiplos Projetos:** Essa configuração se aplica a toda a máquina virtual. Se você pretende rodar o VibeCast simultaneamente com outros projetos Docker na mesma máquina, é recomendado aumentar esse limite no arquivo (ex: `memory=4GB` ou `6GB`) ou simplesmente apagar o arquivo `.wslconfig` para permitir que o Docker gerencie a memória de forma dinâmica, evitando que os contêineres caiam por falta de recursos.
+
+---
+
+## Como executar o projeto
+
+Você pode iniciar o VibeCast de forma Automatizada (recomendado para uso diário) ou Manual (para ambientes de desenvolvimento).
+
+### Opção A: Início Automatizado (Apenas Windows)
+
+O projeto possui um executável projetado para orquestrar os contêineres com um único clique. Como o executável atua como um ativador de scripts do Docker no ambiente WSL, ele precisa estar localizado na pasta correta para funcionar.
+
+1. Acesse o repositório oficial no GitHub pelo navegador: [https://github.com/AlissonKaelan/VibeCast](https://github.com/AlissonKaelan/VibeCast)
+2. Na barra lateral direita, clique em **Releases**.
+3. Baixe a versão mais recente do arquivo `VibeCast.exe`.
+4. Mova o arquivo `VibeCast.exe` e cole-o diretamente na **raiz da pasta do projeto clonado** no seu computador. Após colar na pasta correta, você pode criar um atalho deste arquivo e enviá-lo para a sua Área de Trabalho para facilitar o acesso no dia a dia.
+5. **Obrigatório:** O aplicativo **Docker Desktop deve estar aberto e rodando** no seu computador antes de tentar iniciar o projeto.
+6. Dê um duplo clique no executável ou no atalho. O script ligará os contêineres silenciosamente, aguardará a inicialização do Banco de Dados e abrirá o aplicativo automaticamente no seu navegador Chrome.
+
+### Opção B: Inicialização Manual (Linux / Mac / Dev)
+
+Caso prefira levantar os serviços pelo terminal ou utilize outro sistema operacional:
+
+1. Na raiz do projeto, suba a infraestrutura executando: `docker compose up -d`
+2. Entre no contêiner do backend para rodar os comandos administrativos: `docker compose exec app bash`
+3. Dentro do contêiner, execute as instalações e migrações:
+* `composer install`
+* `php artisan migrate:fresh`
+* `php artisan storage:link`
+
+
+4. Digite `exit` para sair do contêiner.
+5. Abra o seu navegador e acesse: `http://localhost:5173`
+
+---
+
+## Solução de Problemas (Troubleshooting)
+
+**Problemas com Downloads (Erro 403 do YouTube)**
+O YouTube atualiza constantemente suas defesas. Se o download falhar silenciosamente:
+
+* **Cookies Expirados:** O seu arquivo de cookies perdeu a validade. Refaça o "Passo 2" da instalação gerando um novo arquivo pelo navegador e substituindo o antigo na pasta `extractor-python/`. Reinicie o serviço do Python em seguida.
+* **Extrator Desatualizado:** Caso a biblioteca fique defasada, acesse o terminal, entre no contêiner do Python (`docker compose exec python-extractor bash`) e force a atualização rodando: `pip install --upgrade yt-dlp`. Reinicie o contêiner.
+
+---
