@@ -30,6 +30,7 @@ O projeto adota uma arquitetura de múltiplos microsserviços 100% orquestrada e
 ---
 
 #### Requisitos de Ambiente
+
 Para rodar o projeto do zero em uma máquina nova, você precisará de:
 
 * **Docker Desktop aberto e em execução** no seu computador, com a integração WSL 2 ativada (para usuários de Windows/Ubuntu).
@@ -132,31 +133,39 @@ processors=2
 Devido à ausência da pasta de dependências (`vendor/`), a primeira inicialização do projeto requer uma configuração manual pelo terminal. O arquivo `docker-compose.yml` do repositório possui uma trava temporária (`command: tail -f /dev/null`) nos serviços para permitir essa instalação de forma segura.
 
 ### Etapa Única: Primeira Instalação (Obrigatório)
+
 **Importante:** O aplicativo Docker Desktop deve estar obrigatoriamente aberto e rodando no seu computador antes de prosseguir com os passos abaixo.
 
 1. Na raiz do projeto, suba a infraestrutura executando:
-   ```bash
-   docker compose up -d
-   ```
+```bash
+docker compose up -d
+
+```
+
+
 2. Entre no contêiner do backend para rodar os comandos administrativos:
 ```bash
 docker compose exec app bash
 
 ```
-3. Dentro do contêiner, baixe o ecossistema do Laravel e crie as tabelas do banco de dados:
+
+
+3. Dentro do contêiner, baixe o ecossistema do Laravel e crie as tabelas do banco de dados executando em sequência:
 ```bash
 composer install
-```
-```bash
 php artisan migrate:fresh
-```
-```bash
 php artisan storage:link
+
 ```
 
 
 4. Digite `exit` para sair do contêiner.
-5. **Importante:** Abra o arquivo `docker-compose.yml` na raiz do projeto, remova as linhas `command: tail -f /dev/null` dos serviços `app` e `queue-worker`, e salve o arquivo.
+5. **Importante:** Abra o arquivo `docker-compose.yml` na raiz do projeto e desfaça as travas de segurança:
+* **Comente** a linha `command: tail -f /dev/null` nos serviços `app` e `queue-worker` adicionando um `#` no início delas.
+* **Descomente** a linha de comando do serviço `queue-worker` removendo o `#` da frente, para que fique exatamente assim: `command: php artisan queue:work --timeout=300 --tries=3`.
+* Salve o arquivo.
+
+
 6. Desligue os contêineres executando `docker compose down`.
 
 ### Uso Diário: Escolha sua forma de iniciar
@@ -170,7 +179,7 @@ Após concluir a Etapa Única acima, você não precisará mais instalar depend�
 
 **Opção 2: Início Automatizado via Script `.bat` (Apenas Windows)**
 
-1. Dê um duplo clique no arquivo Iniciar_VibeCast.bat localizado na raiz da pasta do projeto. (Dica: Você pode criar um atalho deste arquivo e enviá-lo para a sua Área de Trabalho para facilitar o acesso)
+1. Dê um duplo clique no arquivo `Iniciar_VibeCast.bat` localizado na raiz da pasta do projeto. *(Dica: Você pode criar um atalho deste arquivo e enviá-lo para a sua Área de Trabalho para facilitar o acesso)*.
 2. O script ligará os contêineres silenciosamente, aguardará a inicialização do Banco de Dados e abrirá o aplicativo automaticamente no seu navegador Chrome.
 
 ---
