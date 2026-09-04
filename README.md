@@ -29,16 +29,13 @@ O projeto adota uma arquitetura de múltiplos microsserviços 100% orquestrada e
 
 ---
 
-## Requisitos de Ambiente
-
+#### Requisitos de Ambiente
 Para rodar o projeto do zero em uma máquina nova, você precisará de:
 
-* **Docker Engine** (Para usuários de Windows ou macOS, instale o **Docker Desktop**).
-* **WSL 2 (Ubuntu/Linux) ativado** (Obrigatório apenas para usuários de Windows, garantindo que o Docker funcione corretamente).
+* **Docker Desktop aberto e em execução** no seu computador, com a integração WSL 2 ativada (para usuários de Windows/Ubuntu).
 * **Git** (para clonar o repositório).
 * **Extensão de Navegador:** "Get cookies.txt LOCALLY" (necessária para autenticação de downloads).
-
-*(Não é necessário instalar Node.js, PHP ou Python na sua máquina física, o Docker se encarregará de construir contêineres virgens com as versões exatas necessárias).*
+*(O Node.js e o PHP não precisam ser instalados na máquina física, pois o Docker construirá contêineres virgens com as versões exatas necessárias).*
 
 ---
 
@@ -55,10 +52,11 @@ Para usuários de **Windows**, a escolha do local onde o projeto será clonado a
 O Docker no Windows funciona através de uma máquina virtual Linux (WSL2). Manter os arquivos dentro do sistema de arquivos nativo do Linux (`/home/...`) garante máxima velocidade de leitura e escrita, evita problemas de permissão e impede travamentos no *hot-reload* do Vue.js.
 
 * Abra o terminal do seu Ubuntu (WSL) e execute:
+
 ```bash
 mkdir -p ~/projetos
 cd ~/projetos
-git clone [https://github.com/AlissonKaelan/VibeCast](https://github.com/AlissonKaelan/VibeCast)
+git clone https://github.com/AlissonKaelan/VibeCast
 
 ```
 
@@ -70,7 +68,7 @@ git clone [https://github.com/AlissonKaelan/VibeCast](https://github.com/Alisson
 * Caso prefira essa abordagem, abra o PowerShell/Git Bash e execute:
 
 ```bash
-git clone [https://github.com/AlissonKaelan/VibeCast](https://github.com/AlissonKaelan/VibeCast)
+git clone https://github.com/AlissonKaelan/VibeCast
 
 ```
 
@@ -127,35 +125,53 @@ processors=2
 
 ---
 
-## Como executar o projeto
+#### Como executar o projeto
 
-Você pode iniciar o VibeCast de forma Automatizada (recomendado para uso diário) ou Manual (para ambientes de desenvolvimento).
+> **Aviso de Desenvolvimento:** No momento, o executável (`.exe`) fornecido nas *Releases* deste repositório encontra-se inativo enquanto estudamos a melhor forma de gerar um binário 100% seguro. Siga as instruções abaixo utilizando o terminal ou o arquivo `.bat`.
 
-### Opção A: Início Automatizado (Apenas Windows)
+Devido à ausência da pasta de dependências (`vendor/`), a primeira inicialização do projeto requer uma configuração manual pelo terminal. O arquivo `docker-compose.yml` do repositório possui uma trava temporária (`command: tail -f /dev/null`) nos serviços para permitir essa instalação de forma segura.
 
-O projeto possui um executável projetado para orquestrar os contêineres com um único clique. Como o executável atua como um ativador de scripts do Docker no ambiente WSL, ele precisa estar localizado na pasta correta para funcionar.
+### Etapa Única: Primeira Instalação (Obrigatório)
+**Importante:** O aplicativo Docker Desktop deve estar obrigatoriamente aberto e rodando no seu computador antes de prosseguir com os passos abaixo.
 
-1. Acesse o repositório oficial no GitHub pelo navegador: [https://github.com/AlissonKaelan/VibeCast](https://github.com/AlissonKaelan/VibeCast)
-2. Na barra lateral direita, clique em **Releases**.
-3. Baixe a versão mais recente do arquivo `VibeCast.exe`.
-4. Mova o arquivo `VibeCast.exe` e cole-o diretamente na **raiz da pasta do projeto clonado** no seu computador. Após colar na pasta correta, você pode criar um atalho deste arquivo e enviá-lo para a sua Área de Trabalho para facilitar o acesso no dia a dia.
-5. **Obrigatório:** O aplicativo **Docker Desktop deve estar aberto e rodando** no seu computador antes de tentar iniciar o projeto.
-6. Dê um duplo clique no executável ou no atalho. O script ligará os contêineres silenciosamente, aguardará a inicialização do Banco de Dados e abrirá o aplicativo automaticamente no seu navegador Chrome.
+1. Na raiz do projeto, suba a infraestrutura executando:
+   ```bash
+   docker compose up -d
+   ```
+2. Entre no contêiner do backend para rodar os comandos administrativos:
+```bash
+docker compose exec app bash
 
-### Opção B: Inicialização Manual (Linux / Mac / Dev)
-
-Caso prefira levantar os serviços pelo terminal ou utilize outro sistema operacional:
-
-1. Na raiz do projeto, suba a infraestrutura executando: `docker compose up -d`
-2. Entre no contêiner do backend para rodar os comandos administrativos: `docker compose exec app bash`
-3. Dentro do contêiner, execute as instalações e migrações:
-* `composer install`
-* `php artisan migrate:fresh`
-* `php artisan storage:link`
+```
+3. Dentro do contêiner, baixe o ecossistema do Laravel e crie as tabelas do banco de dados:
+```bash
+composer install
+```
+```bash
+php artisan migrate:fresh
+```
+```bash
+php artisan storage:link
+```
 
 
 4. Digite `exit` para sair do contêiner.
-5. Abra o seu navegador e acesse: `http://localhost:5173`
+5. **Importante:** Abra o arquivo `docker-compose.yml` na raiz do projeto, remova as linhas `command: tail -f /dev/null` dos serviços `app` e `queue-worker`, e salve o arquivo.
+6. Desligue os contêineres executando `docker compose down`.
+
+### Uso Diário: Escolha sua forma de iniciar
+
+Após concluir a Etapa Única acima, você não precisará mais instalar dependências. Escolha uma das abordagens abaixo para usar o VibeCast no seu dia a dia:
+
+**Opção 1: Inicialização Manual (Linux / Mac / Dev / Windows)**
+
+1. Na raiz do projeto, suba a infraestrutura executando: `docker compose up -d`
+2. Abra o seu navegador e acesse: `http://localhost:5173`
+
+**Opção 2: Início Automatizado via Script `.bat` (Apenas Windows)**
+
+1. Dê um duplo clique no arquivo Iniciar_VibeCast.bat localizado na raiz da pasta do projeto. (Dica: Você pode criar um atalho deste arquivo e enviá-lo para a sua Área de Trabalho para facilitar o acesso)
+2. O script ligará os contêineres silenciosamente, aguardará a inicialização do Banco de Dados e abrirá o aplicativo automaticamente no seu navegador Chrome.
 
 ---
 
@@ -164,7 +180,7 @@ Caso prefira levantar os serviços pelo terminal ou utilize outro sistema operac
 **Problemas com Downloads (Erro 403 do YouTube)**
 O YouTube atualiza constantemente suas defesas. Se o download falhar silenciosamente:
 
-* **Cookies Expirados:** O seu arquivo de cookies perdeu a validade. Refaça o "Passo 2" da instalação gerando um novo arquivo pelo navegador e substituindo o antigo na pasta `extractor-python/`. Reinicie o serviço do Python em seguida.
+* **Cookies Expirados:** O seu arquivo de cookies perdeu a validade. Refaça o "Passo 2" da instalação gerando um novo arquivo pelo navegador e substituindo o antigo na pasta `extractor-python/`. Reinicie o serviço do Python em seguida (`docker compose restart python-extractor`).
 * **Extrator Desatualizado:** Caso a biblioteca fique defasada, acesse o terminal, entre no contêiner do Python (`docker compose exec python-extractor bash`) e force a atualização rodando: `pip install --upgrade yt-dlp`. Reinicie o contêiner.
 
 ---
