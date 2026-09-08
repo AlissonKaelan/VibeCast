@@ -13,6 +13,7 @@ services:
     volumes:
       - ./backend-laravel:/var/www
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./importacao_local:/var/www/importacao_local
     depends_on:
       - db
     networks:
