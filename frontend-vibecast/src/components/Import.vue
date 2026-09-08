@@ -5,11 +5,15 @@ import { X, Music, Youtube, FolderDot, ArrowLeft, Cloud } from 'lucide-vue-next'
 
 const playerStore = usePlayerStore()
 
-// null = Mostra as opções | 'spotify', 'soundcloud' ou 'youtube'
+// null = Mostra as opções | 'spotify', 'soundcloud', 'youtube' ou 'local'
 const selectedSource = ref(null) 
 const playlistUrl = ref('')
 const isLoading = ref(false)
 
+const isDragging = ref(false)
+const fileInput = ref(null)
+
+// 1. Processa Importações via Link (Spotify, YouTube, SoundCloud)
 const processImport = async () => {
   if (!playlistUrl.value) {
     playerStore.notify('Cole um link válido!', 'error')
@@ -18,7 +22,6 @@ const processImport = async () => {
 
   isLoading.value = true
   
-  // Decide qual rota do Laravel chamar com base na escolha do usuário
   let endpoint = 'http://localhost:8000/api/import-playlist' // Padrão (Spotify)
   
   if (selectedSource.value === 'soundcloud') {
@@ -47,6 +50,53 @@ const processImport = async () => {
   } finally {
     isLoading.value = false
     playlistUrl.value = ''
+  }
+}
+
+// 2. Processa Importações Físicas (Drag & Drop ou Clique)
+const handleFiles = async (event) => {
+  isDragging.value = false
+  const files = event.dataTransfer ? event.dataTransfer.files : event.target.files
+  
+  if (!files || files.length === 0) return
+
+  const formData = new FormData()
+  let audioCount = 0
+
+  for (let i = 0; i < files.length; i++) {
+    if (files[i].type.startsWith('audio/') || files[i].name.match(/\.(mp3|m4a|wav|flac)$/i)) {
+      formData.append('files[]', files[i])
+      audioCount++
+    }
+  }
+
+  if (audioCount === 0) {
+    playerStore.notify('Nenhum arquivo de áudio suportado foi solto.', 'error')
+    return
+  }
+
+  isLoading.value = true
+  playerStore.notify(`Enviando ${audioCount} música(s)...`, 'success')
+
+  try {
+    const response = await fetch('http://localhost:8000/api/import/web-upload', {
+      method: 'POST',
+      body: formData
+    })
+    
+    const data = await response.json()
+    if (data.success) {
+      playerStore.notify(data.message, 'success')
+      playerStore.loadAllTracks()
+      closeModal()
+    } else {
+      playerStore.notify(data.error || 'Erro ao importar arquivos', 'error')
+    }
+  } catch (error) {
+    playerStore.notify('Falha ao enviar os arquivos para o servidor.', 'error')
+  } finally {
+    isLoading.value = false
+    if (fileInput.value) fileInput.value.value = '' // Reseta o input invisível
   }
 }
 
@@ -101,12 +151,11 @@ const closeModal = () => {
             <span class="font-bold text-white">YouTube</span>
           </button>
 
-          <button disabled class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/10 opacity-50 cursor-not-allowed">
-            <div class="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center">
+          <button @click="selectedSource = 'local'" class="flex flex-col items-center gap-4 p-6 rounded-xl border border-neutral-800 bg-neutral-800/30 hover:bg-blue-500/10 hover:border-blue-500/50 transition-all group">
+            <div class="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
               <FolderDot class="w-8 h-8 text-blue-500" />
             </div>
             <span class="font-bold text-white">PC Local</span>
-            <span class="text-[10px] bg-neutral-700 px-2 py-1 rounded text-white font-bold uppercase tracking-wider absolute mt-28">Em breve</span>
           </button>
         </div>
       </div>
@@ -129,7 +178,38 @@ const closeModal = () => {
             <p class="text-sm font-medium text-red-100">Cole o link de um Vídeo ou Playlist do YouTube.</p>
           </div>
 
-          <div class="flex gap-3">
+          <div v-if="selectedSource === 'local'" class="flex items-center gap-4 text-blue-400 bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
+            <FolderDot class="w-6 h-6" />
+            <p class="text-sm font-medium text-blue-100">Arraste seus arquivos de áudio direto do computador.</p>
+          </div>
+
+          <div v-if="selectedSource === 'local'">
+            <div 
+              @dragover.prevent="isDragging = true" 
+              @dragleave.prevent="isDragging = false" 
+              @drop.prevent="handleFiles"
+              @click="$refs.fileInput.click()"
+              :class="isDragging ? 'border-blue-500 bg-blue-500/10' : 'border-neutral-700 bg-black/50'"
+              class="border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center transition-all cursor-pointer hover:border-neutral-500 relative"
+            >
+              <input type="file" ref="fileInput" multiple accept="audio/*,.mp3,.m4a,.wav,.flac" class="hidden" @change="handleFiles" />
+              
+              <div v-if="isLoading" class="flex flex-col items-center gap-4">
+                <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span class="text-white font-bold">Processando arquivos e lendo nomes...</span>
+              </div>
+              <div v-else class="flex flex-col items-center">
+                <div class="w-16 h-16 bg-neutral-800 rounded-full flex items-center justify-center mb-4 transition-colors">
+                  <span class="text-3xl">📥</span>
+                </div>
+                <h3 class="text-white font-bold mb-1 text-lg">Solte suas músicas aqui</h3>
+                <p class="text-neutral-400 text-sm mb-4">Ou clique para procurar as pastas no seu PC</p>
+                <p class="text-neutral-500 text-xs">Suporta .mp3, .m4a, .wav, .flac</p>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="flex gap-3">
             <input 
               v-model="playlistUrl" 
               type="text" 
