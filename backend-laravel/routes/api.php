@@ -34,6 +34,9 @@ Route::post('/import-playlist', [AudioController::class, 'importPlaylist']);
 Route::post('/import-soundcloud', [AudioController::class, 'importSoundcloud']);
 Route::post('/import/youtube', [ImportYouTubeController::class, 'import']);
 Route::post('/playlist/import', [PlaylistController::class, 'import']);
+Route::get('/import/local-scan', [App\Http\Controllers\LocalImportController::class, 'scanLocalFolder']);
+Route::post('/import/local-process', [App\Http\Controllers\LocalImportController::class, 'processLocalImport']);
+Route::post('/import/web-upload', [App\Http\Controllers\LocalImportController::class, 'uploadWebFiles']);
 
 /*
 |--------------------------------------------------------------------------

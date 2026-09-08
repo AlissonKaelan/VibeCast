@@ -23,7 +23,6 @@ class AudioController extends Controller
 
         try {
             // 2. Faz a requisição HTTP interna para o contêiner do Python
-            // Repare no HOST: usamos 'python-extractor' que é o nome do serviço no docker-compose
             $response = Http::post('http://python-extractor:5000/extract-audio', [
                 'title' => $request->title,
                 'artist' => $request->artist,
@@ -61,8 +60,6 @@ class AudioController extends Controller
             ]);
         }
 
-        // AQUI ESTÁ A MÁGICA DA FILA! 
-        // Em vez de baixar aqui, mandamos o ID para o nosso Trabalhador Invisível.
         \App\Jobs\DownloadAudioJob::dispatch($track->id);
 
         return response()->json([
@@ -126,18 +123,13 @@ class AudioController extends Controller
             if ($response->successful()) {
                 $data = $response->json();
 
-                
-                // 2. Cria a nova Playlist no banco
                 $playlist = \App\Models\Playlist::create([
                     'name' => $data['playlist_name'],
                     'description' => 'Importada via VibeCast'
                 ]);
 
-                // 3. Salva todas as músicas dentro desta playlist
                 foreach ($data['tracks_urls'] as $trackData) {
                     
-                    // Verifica se já existe uma música com este exato Título e Artista.
-                    // Se existir, pega nela. Se não existir, cria uma nova.
                     $track = \App\Models\Track::firstOrCreate(
                         [
                             'title' => $trackData['title'],
@@ -174,12 +166,10 @@ class AudioController extends Controller
     }
     public function exportPlaylist($id)
     {
-        // 1. Procura a playlist e as suas músicas
         $playlist = \App\Models\Playlist::with('tracks')->findOrFail($id);
         
-        // 2. Cria o ficheiro ZIP temporário
         $zip = new \ZipArchive();
-        // Remove espaços e acentos do nome da playlist para não dar erro no Windows
+
         $safePlaylistName = preg_replace('/[^A-Za-z0-9\-]/', '_', $playlist->name);
         $zipFileName = 'VibeCast_' . $safePlaylistName . '.zip';
         $zipPath = storage_path('app/public/' . $zipFileName);
@@ -187,7 +177,6 @@ class AudioController extends Controller
         if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === TRUE) {
             $hasFiles = false;
 
-            // 3. Adiciona as músicas baixadas ao ZIP
             foreach ($playlist->tracks as $track) {
                 // Só adiciona se a música já tiver sido baixada (file_path preenchido e ficheiro real existir)
                 if ($track->file_path && \Storage::disk('public')->exists($track->file_path)) {
@@ -204,12 +193,10 @@ class AudioController extends Controller
             }
             $zip->close();
 
-            // 4. Se não havia nenhuma música baixada na playlist, avisa o utilizador
             if (!$hasFiles) {
                 return response()->json(['error' => 'Nenhuma música desta playlist foi descarregada ainda.'], 400);
             }
 
-            // 5. Envia para o navegador e apaga o ZIP do servidor a seguir (para poupar espaço)
             return response()->download($zipPath)->deleteFileAfterSend(true);
         }
 
@@ -309,12 +296,10 @@ class AudioController extends Controller
     {
         $track = \App\Models\Track::findOrFail($id);
 
-        // Se a música já foi baixada, apaga o arquivo físico (.m4a) do disco!
         if ($track->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($track->file_path)) {
             \Illuminate\Support\Facades\Storage::disk('public')->delete($track->file_path);
         }
 
-        // Apaga o registo do banco de dados
         $track->delete();
 
         return response()->json([

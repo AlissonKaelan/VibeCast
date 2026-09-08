@@ -2,6 +2,9 @@ FROM php:8.2-fpm
 
 # Instala dependências do sistema e extensões PHP necessárias para o Laravel e MySQL
 RUN apt-get update && apt-get install -y \
+    libzip-dev \
+    zip \
+    unzip \
     git \
     curl \
     libpng-dev \
@@ -22,3 +25,8 @@ WORKDIR /var/www
 
 EXPOSE 8000
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+
+# Aumenta os limites de upload do PHP para 100MB
+RUN echo "upload_max_filesize = 100M" > /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/uploads.ini
