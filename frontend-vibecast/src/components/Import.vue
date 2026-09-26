@@ -56,27 +56,57 @@ const processImport = async () => {
 // 2. Processa Importações Físicas (Drag & Drop ou Clique)
 const handleFiles = async (event) => {
   isDragging.value = false
-  const files = event.dataTransfer ? event.dataTransfer.files : event.target.files
-  
-  if (!files || files.length === 0) return
-
   const formData = new FormData()
   let audioCount = 0
 
-  for (let i = 0; i < files.length; i++) {
-    if (files[i].type.startsWith('audio/') || files[i].name.match(/\.(mp3|m4a|wav|flac)$/i)) {
-      formData.append('files[]', files[i])
-      audioCount++
+  // Função recursiva inteligente: abre pastas e subpastas para caçar arquivos de áudio
+  const processEntry = async (entry) => {
+    if (entry.isFile) {
+      const file = await new Promise(resolve => entry.file(resolve))
+      if (file.type.startsWith('audio/') || file.name.match(/\.(mp3|m4a|wav|flac)$/i)) {
+        formData.append('files[]', file)
+        audioCount++
+      }
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader()
+      const entries = await new Promise(resolve => dirReader.readEntries(resolve))
+      // Varre tudo o que encontrou dentro da pasta
+      for (let i = 0; i < entries.length; i++) {
+        await processEntry(entries[i])
+      }
+    }
+  }
+
+  // 1. O usuário ARRASTOU os arquivos/pastas para o tracejado
+  if (event.dataTransfer && event.dataTransfer.items) {
+    const items = event.dataTransfer.items
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry()
+      if (entry) {
+        await processEntry(entry)
+      }
+    }
+  } 
+  // 2. O usuário CLICOU para selecionar no gerenciador de arquivos
+  else {
+    const files = event.target.files
+    if (files) {
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].type.startsWith('audio/') || files[i].name.match(/\.(mp3|m4a|wav|flac)$/i)) {
+          formData.append('files[]', files[i])
+          audioCount++
+        }
+      }
     }
   }
 
   if (audioCount === 0) {
-    playerStore.notify('Nenhum arquivo de áudio suportado foi solto.', 'error')
+    playerStore.notify('Nenhuma música encontrada na pasta arrastada.', 'error')
     return
   }
 
   isLoading.value = true
-  playerStore.notify(`Enviando ${audioCount} música(s)...`, 'success')
+  playerStore.notify(`Enviando ${audioCount} música(s) da pasta...`, 'success')
 
   try {
     const response = await fetch('http://localhost:8000/api/import/web-upload', {
@@ -87,7 +117,7 @@ const handleFiles = async (event) => {
     const data = await response.json()
     if (data.success) {
       playerStore.notify(data.message, 'success')
-      playerStore.loadAllTracks()
+      playerStore.loadAllTracks() 
       closeModal()
     } else {
       playerStore.notify(data.error || 'Erro ao importar arquivos', 'error')
@@ -96,13 +126,37 @@ const handleFiles = async (event) => {
     playerStore.notify('Falha ao enviar os arquivos para o servidor.', 'error')
   } finally {
     isLoading.value = false
-    if (fileInput.value) fileInput.value.value = '' // Reseta o input invisível
+    if (fileInput.value) fileInput.value.value = ''
   }
 }
 
 const closeModal = () => {
   playerStore.closeImportModal()
   setTimeout(() => { selectedSource.value = null; playlistUrl.value = '' }, 300) 
+}
+
+const syncMassiveFolder = async () => {
+  isLoading.value = true
+  playerStore.notify('Iniciando varredura profunda no disco...', 'success')
+
+  try {
+    const response = await fetch('http://localhost:8000/api/import/massive-sync', {
+      method: 'POST'
+    })
+    
+    const data = await response.json()
+    if (data.success) {
+      playerStore.notify(data.message, 'success')
+      playerStore.loadAllTracks()
+      closeModal()
+    } else {
+      playerStore.notify(data.error || 'Erro na sincronização', 'error')
+    }
+  } catch (error) {
+    playerStore.notify('Falha ao conectar com o servidor local.', 'error')
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 
@@ -178,9 +232,24 @@ const closeModal = () => {
             <p class="text-sm font-medium text-red-100">Cole o link de um Vídeo ou Playlist do YouTube.</p>
           </div>
 
-          <div v-if="selectedSource === 'local'" class="flex items-center gap-4 text-blue-400 bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
-            <FolderDot class="w-6 h-6" />
-            <p class="text-sm font-medium text-blue-100">Arraste seus arquivos de áudio direto do computador.</p>
+          <!-- AVISO PC LOCAL (Sincronização em Massa) -->
+          <div v-if="selectedSource === 'local'" class="flex flex-col gap-6">
+            <div class="flex items-center gap-4 text-blue-400 bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
+              <FolderDot class="w-6 h-6 shrink-0" />
+              <p class="text-sm font-medium text-blue-100">Mova as suas pastas de músicas pesadas (Gigabytes) para dentro da pasta <b>importacao_local</b> na raiz do seu projeto e clique no botão abaixo.</p>
+            </div>
+
+            <button 
+              @click="syncMassiveFolder" 
+              :disabled="isLoading"
+              class="text-white px-8 py-4 rounded-lg font-bold transition-all w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50"
+            >
+              <span v-if="!isLoading">Sincronizar Arquivos Físicos</span>
+              <span v-else class="flex items-center justify-center gap-2">
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Movendo Gigabytes e lendo metadados...
+              </span>
+            </button>
           </div>
 
           <div v-if="selectedSource === 'local'">
@@ -192,7 +261,7 @@ const closeModal = () => {
               :class="isDragging ? 'border-blue-500 bg-blue-500/10' : 'border-neutral-700 bg-black/50'"
               class="border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center transition-all cursor-pointer hover:border-neutral-500 relative"
             >
-              <input type="file" ref="fileInput" multiple accept="audio/*,.mp3,.m4a,.wav,.flac" class="hidden" @change="handleFiles" />
+              <input type="file" ref="fileInput" multiple webkitdirectory directory accept=".mp3,.m4a,.wav,.flac,audio/*,audio/mp4,audio/x-m4a" class="hidden" @change="handleFiles" />
               
               <div v-if="isLoading" class="flex flex-col items-center gap-4">
                 <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>

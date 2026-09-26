@@ -37,6 +37,7 @@ Route::post('/playlist/import', [PlaylistController::class, 'import']);
 Route::get('/import/local-scan', [App\Http\Controllers\LocalImportController::class, 'scanLocalFolder']);
 Route::post('/import/local-process', [App\Http\Controllers\LocalImportController::class, 'processLocalImport']);
 Route::post('/import/web-upload', [App\Http\Controllers\LocalImportController::class, 'uploadWebFiles']);
+Route::post('/import/massive-sync', [App\Http\Controllers\LocalImportController::class, 'syncMassiveLocalFolder']);
 
 /*
 |--------------------------------------------------------------------------

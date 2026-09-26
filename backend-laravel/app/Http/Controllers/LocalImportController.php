@@ -167,4 +167,82 @@ class LocalImportController extends Controller
             'tracks' => $importedTracks
         ]);
     }
+
+    public function syncMassiveLocalFolder()
+    {
+        // 1. Destrava os limites apenas para esta execução pesada
+        ini_set('memory_limit', '2G'); 
+        set_time_limit(300); // 5 minutos de paciência
+
+        $directory = base_path('importacao_local');
+        $destinationFolder = storage_path('app/public/musicas');
+
+        if (!is_dir($directory)) {
+            return response()->json(['error' => 'A pasta importacao_local não foi encontrada na raiz do projeto.'], 404);
+        }
+
+        if (!file_exists($destinationFolder)) {
+            mkdir($destinationFolder, 0755, true);
+        }
+
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
+        $importedTracks = [];
+
+        foreach ($iterator as $file) {
+            if ($file->isFile() && preg_match('/\.(mp3|m4a|wav|flac)$/i', $file->getFilename())) {
+                $sourcePath = $file->getPathname();
+                
+                // 2. Instancia o getID3 dentro do loop e pede para NÃO extrair fotos (poupa muita RAM)
+                $getID3 = new \getID3;
+                $getID3->option_save_attachments = false; 
+                
+                $fileInfo = $getID3->analyze($sourcePath);
+
+                $originalName = $file->getFilename();
+                $title = $fileInfo['tags']['id3v2']['title'][0] ?? $fileInfo['tags']['id3v1']['title'][0] ?? null;
+                $artist = $fileInfo['tags']['id3v2']['artist'][0] ?? $fileInfo['tags']['id3v1']['artist'][0] ?? null;
+
+                if (!$title || !$artist) {
+                    $nameWithoutExt = pathinfo($originalName, PATHINFO_FILENAME);
+                    $parts = explode(' - ', $nameWithoutExt, 2);
+                    if (count($parts) === 2) {
+                        $artist = $artist ?? trim($parts[0]);
+                        $title = $title ?? trim($parts[1]);
+                    } else {
+                        $title = $title ?? $nameWithoutExt;
+                        $artist = $artist ?? 'Artista Desconhecido';
+                    }
+                }
+
+                $durationBruta = is_array($fileInfo['playtime_seconds'] ?? 0) ? current($fileInfo['playtime_seconds']) : ($fileInfo['playtime_seconds'] ?? 0);
+                $duration = round($durationBruta);
+
+                $safeTitle = preg_replace('/[^a-zA-Z0-9]/', '_', strtolower(trim($title)));
+                $safeArtist = preg_replace('/[^a-zA-Z0-9]/', '_', strtolower(trim($artist)));
+                $ext = $file->getExtension();
+
+                $newFileName = time() . '_' . uniqid() . "_{$safeArtist}_{$safeTitle}.{$ext}";
+                $destinationPath = $destinationFolder . '/' . $newFileName;
+
+                if (rename($sourcePath, $destinationPath)) {
+                    $track = \App\Models\Track::create([
+                        'title' => $title,
+                        'artist' => $artist,
+                        'file_path' => 'musicas/' . $newFileName,
+                        'duration_seconds' => $duration
+                    ]);
+                    $importedTracks[] = $track;
+                }
+                
+                // 3. Força a faxina de memória após mover o arquivo
+                unset($getID3, $fileInfo);
+                gc_collect_cycles();
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => count($importedTracks) . ' músicas sincronizadas com sucesso do disco local!'
+        ]);
+    }
 }
