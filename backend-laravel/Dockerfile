@@ -26,7 +26,8 @@ WORKDIR /var/www
 EXPOSE 8000
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
 
-# Aumenta os limites de upload do PHP para 100MB
-RUN echo "upload_max_filesize = 100M" > /usr/local/etc/php/conf.d/uploads.ini \
-    && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/uploads.ini \
-    && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/uploads.ini
+# Aumenta os limites de upload e a quantidade máxima de arquivos simultâneos no PHP
+RUN echo "upload_max_filesize = 1G" > /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "post_max_size = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "memory_limit = 2G" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "max_file_uploads = 1000" >> /usr/local/etc/php/conf.d/uploads.ini
