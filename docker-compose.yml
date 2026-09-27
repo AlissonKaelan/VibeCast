@@ -4,7 +4,7 @@ services:
     build:
       context: ./backend-laravel
       dockerfile: Dockerfile
-    #command: tail -f /dev/null
+    command: tail -f /dev/null
     image: spotube-laravel-app
     restart: unless-stopped
     tty: true
@@ -26,7 +26,7 @@ services:
       dockerfile: Dockerfile
     container_name: vibecast-queue-worker
     restart: unless-stopped
-    #command: tail -f /dev/null
+    command: tail -f /dev/null
     #command: php artisan queue:work --timeout=300 --tries=3
     volumes:
       - ./backend-laravel:/var/www
