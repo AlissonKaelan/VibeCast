@@ -106,14 +106,10 @@ services:
       MYSQL_DATABASE: VibeCast
       MYSQL_ROOT_PASSWORD: root_password_local
     volumes:
-      - spotube-db-data:/var/lib/mysql
+      - ./mysql-data:/var/lib/mysql
     networks:
       - spotube-net
 
 networks:
   spotube-net:
     driver: bridge
-
-volumes:
-  spotube-db-data:
-    driver: local
